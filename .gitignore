@@ -1,0 +1,14 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Logs
+logs/
+*.log
+
+# Môi trường ảo (nếu có)
+venv/
+.env
+
+# Cài đặt của VS Code
+.vscode/
