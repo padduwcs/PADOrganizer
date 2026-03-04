@@ -12,3 +12,6 @@ venv/
 
 # Cài đặt của VS Code
 .vscode/
+
+build/
+dist/

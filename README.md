@@ -1,13 +1,18 @@
-# Smart File Organizer 🚀
-Dự án Python tự động hóa phân loại file dựa trên định dạng.
+# 🚀 Smart File Organizer
 
-## Tính năng
-- Tự động quét và di chuyển file vào thư mục tương ứng.
-- Xử lý trùng tên thông minh (không ghi đè file cũ).
-- Có giao diện chọn thư mục (GUI).
-- Ghi log lịch sử hoạt động.
+Công cụ tự động hóa giúp dọn dẹp và phân loại file chỉ với một cú click. 
 
-## Cách sử dụng
-1. Chạy file `main.py`.
-2. Chọn thư mục cần dọn dẹp.
-3. Xem kết quả tại các thư mục Images, Documents...
+## ✨ Tính năng
+- **Phân loại tự động:** Gom file vào các nhóm Images, Documents, Videos...
+- **Giao diện trực quan:** Chọn thư mục thông qua cửa sổ hệ thống (GUI).
+- **Xử lý thông minh:** Tự động đổi tên nếu file đã tồn tại để tránh mất dữ liệu.
+- **Ghi log:** Lưu lịch sử di chuyển vào file `activity.log`.
+
+## 📥 Tải về & Sử dụng 
+Bạn có thể tải bản chạy ngay (.exe) mà không cần cài Python tại mục [Releases](../../releases).
+
+## 🛠 Dành cho Lập trình viên
+Nếu bạn muốn chạy từ mã nguồn hoặc đóng gói lại:
+1. Cài đặt thư viện cần thiết: `pip install pyinstaller`
+2. Chạy ứng dụng: `python main.py`
+3. Đóng gói lại: `pyinstaller SmartOrganizer.spec`
