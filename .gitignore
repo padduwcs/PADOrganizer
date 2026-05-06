@@ -10,8 +10,21 @@ logs/
 venv/
 .env
 
-# Cài đặt của VS Code
-.vscode/
+# OS Files
+.DS_Store
+Thumbs.db
 
+# Cài đặt IDE
+.vscode/
+.idea/
+
+# Build folders
 build/
 dist/
+*.spec
+
+# Cấu hình người dùng
+config.json
+
+# Thùng rác nội bộ
+Smart_Trash/

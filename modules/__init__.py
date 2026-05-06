@@ -1,5 +1,5 @@
-# Import sẵn các class từ các file con
+# modules/__init__.py
 from .classifier import FileMover
 from .logger import SmartLogger
-
-# Giờ đây, bất kỳ ai import package 'modules' đều có thể thấy 2 class này ngay lập tức
+from .config_manager import ConfigManager
+from .deduplicator import Deduplicator
