@@ -72,7 +72,8 @@ build.bat
 Hoặc đóng gói thủ công:
 
 ```bash
-pyinstaller PADOrganizer.spec
+python -m pip install -r requirements-dev.txt
+python -m PyInstaller --clean PADOrganizer.spec
 ```
 
 Tệp thực thi được tạo tại `dist/PADOrganizer.exe`.
@@ -91,6 +92,7 @@ PADOrganizer/
 ├── PADOrganizer.spec       # Cấu hình PyInstaller
 ├── build.bat               # Script đóng gói cho Windows
 ├── requirements.txt
+├── requirements-dev.txt    # Công cụ chỉ dùng để đóng gói
 └── logo.ico
 ```
 

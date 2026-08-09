@@ -7,7 +7,7 @@ echo ==============================================
 echo.
 
 echo [1/2] Cai dat thu vien...
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
 if errorlevel 1 goto :error
 
 echo.

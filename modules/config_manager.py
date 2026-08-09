@@ -32,12 +32,7 @@ DEFAULT_CONFIG = {
 
 class ConfigManager:
     def __init__(self, filename="config.json"):
-        if getattr(sys, 'frozen', False):
-            self.base_dir = Path(sys.executable).parent
-        else:
-            self.base_dir = Path(__file__).resolve().parent.parent
-            
-        self.config_path = self.base_dir / filename
+        self.config_path = BASE_DIR / filename
         self.config = self.load_config()
 
     def load_config(self):

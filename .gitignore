@@ -1,6 +1,12 @@
 # Python cache
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
 
 # Logs
 logs/
@@ -10,6 +16,7 @@ logs/
 venv/
 .venv/
 .env
+.env.*
 
 # OS Files
 .DS_Store

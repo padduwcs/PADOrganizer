@@ -453,12 +453,11 @@ class SettingsDialog(QDialog):
 
 
 class DedupeDialog(QDialog):
-    def __init__(self, duplicates, logger, mover, target_dir, parent=None):
+    def __init__(self, duplicates, logger, mover, parent=None):
         super().__init__(parent)
         self.duplicates = duplicates
         self.logger = logger
         self.mover = mover
-        self.target_dir = Path(target_dir)
         self.group_buttons = []
         self.setWindowTitle("Xử lý tệp trùng lặp")
         self.setModal(True)
@@ -1490,7 +1489,7 @@ class MainWindow(QMainWindow):
         self.action_title_label.setText("Đã tìm thấy bản trùng")
         self.status_label.setText(f"{len(duplicates)} nhóm cần bạn quyết định")
         self.set_status_pill("Cần xem lại", "warning")
-        dialog = DedupeDialog(duplicates, self.logger, self.mover, self.target_dir, self)
+        dialog = DedupeDialog(duplicates, self.logger, self.mover, self)
         dialog.exec()
         self.refresh_directory_summary()
         self.set_ui_enabled(True)
