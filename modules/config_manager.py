@@ -1,6 +1,6 @@
 import json
-import os
 import sys
+from copy import deepcopy
 from pathlib import Path
 
 def get_base_dir():
@@ -47,17 +47,17 @@ class ConfigManager:
                     return json.load(f)
             except Exception:
                 pass
-        return DEFAULT_CONFIG.copy()
+        return deepcopy(DEFAULT_CONFIG)
 
     def save_config(self):
         with open(self.config_path, "w", encoding="utf-8") as f:
             json.dump(self.config, f, indent=4, ensure_ascii=False)
 
     def get_file_map(self):
-        return self.config.get("file_map", DEFAULT_CONFIG["file_map"])
+        return deepcopy(self.config.get("file_map", DEFAULT_CONFIG["file_map"]))
 
     def set_file_map(self, file_map):
-        self.config["file_map"] = file_map
+        self.config["file_map"] = deepcopy(file_map)
         self.save_config()
         
     def is_sort_by_date_enabled(self):

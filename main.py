@@ -1,33 +1,113 @@
-# main.py
-import sys
 import os
+import shutil
+import sys
+from copy import deepcopy
 from pathlib import Path
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                             QHBoxLayout, QPushButton, QLabel, QFileDialog, 
-                             QMessageBox, QProgressBar, QCheckBox,
-                             QInputDialog, QListWidget, QDialog, QScrollArea,
-                             QGroupBox, QRadioButton, QButtonGroup)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QIcon, QFont
 
-from modules import FileMover, PADLogger, ConfigManager, Deduplicator
-from modules.config_manager import PAD_TRASH_DIR
+from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, Qt, QThread, pyqtProperty, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QIcon, QKeySequence, QPainter, QShortcut
+from PyQt6.QtWidgets import (
+    QAbstractButton,
+    QAbstractItemView,
+    QApplication,
+    QButtonGroup,
+    QBoxLayout,
+    QDialog,
+    QFileDialog,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QRadioButton,
+    QScrollArea,
+    QSizePolicy,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
+from modules import ConfigManager, Deduplicator, FileMover, PADLogger
+from modules.config_manager import BASE_DIR, DEFAULT_CONFIG, PAD_TRASH_DIR
+from modules.theme import APP_STYLE, add_shadow
 
 
 APP_NAME = "PADOrganizer"
 APP_FULL_NAME = "PADOrganizer: Personal Archive Directory Organizer"
 
+
 def get_resource_path(relative_path):
-    """ Get absolute path to resource, works for dev and for PyInstaller """
+    """Return an absolute resource path in development and PyInstaller builds."""
     try:
         base_path = sys._MEIPASS
     except Exception:
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
 
+
+def format_bytes(size):
+    value = float(size)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if value < 1024 or unit == "TB":
+            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{value:.1f} TB"
+
+
+def refresh_style(widget):
+    widget.style().unpolish(widget)
+    widget.style().polish(widget)
+    widget.update()
+
+
+class ToggleSwitch(QAbstractButton):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setCheckable(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFixedSize(46, 25)
+        self._handle_position = 3.0
+        self._animation = QPropertyAnimation(self, b"handlePosition", self)
+        self._animation.setDuration(170)
+        self._animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.toggled.connect(self._animate)
+
+    def _animate(self, checked):
+        self._animation.stop()
+        self._animation.setStartValue(self._handle_position)
+        self._animation.setEndValue(24.0 if checked else 3.0)
+        self._animation.start()
+
+    def get_handle_position(self):
+        return self._handle_position
+
+    def set_handle_position(self, value):
+        self._handle_position = value
+        self.update()
+
+    handlePosition = pyqtProperty(float, get_handle_position, set_handle_position)
+
+    def paintEvent(self, event):
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor("#735cf4") if self.isChecked() else QColor("#d4d8e2"))
+        painter.drawRoundedRect(QRectF(0, 0, 46, 25), 12.5, 12.5)
+        painter.setBrush(QColor("#ffffff"))
+        painter.drawEllipse(QRectF(self._handle_position, 3, 19, 19))
+
+
 class WorkerThread(QThread):
     progress = pyqtSignal(int, int, str)
-    finished = pyqtSignal(int, int)
+    completed = pyqtSignal(int, int)
+    failed = pyqtSignal(str)
 
     def __init__(self, watch_path, file_map, mover, logger, sort_by_date):
         super().__init__()
@@ -45,32 +125,42 @@ class WorkerThread(QThread):
         return "Others"
 
     def run(self):
+        try:
+            all_files = [
+                path
+                for path in self.watch_path.iterdir()
+                if path.is_file() and path.name not in {"activity.log", "config.json"}
+            ]
+        except Exception as exc:
+            self.failed.emit(f"Không thể đọc thư mục đã chọn: {exc}")
+            return
+
         success_count = 0
         error_count = 0
-        
-        all_files = [f for f in self.watch_path.iterdir() if f.is_file() and f.name != "activity.log" and f.name != "config.json"]
         total = len(all_files)
-        
-        for i, file_path in enumerate(all_files):
+
+        for index, file_path in enumerate(all_files):
             try:
                 category = self.get_category(file_path.suffix)
-                dest_folder = self.watch_path / category
-                
-                new_path = self.mover.move_file(file_path, dest_folder, self.sort_by_date)
-                self.logger.log(f"SUCCESS: {file_path.name} -> {new_path.relative_to(self.watch_path)}")
+                destination = self.watch_path / category
+                new_path = self.mover.move_file(file_path, destination, self.sort_by_date)
+                self.logger.log(
+                    f"SUCCESS: {file_path.name} -> {new_path.relative_to(self.watch_path)}"
+                )
                 success_count += 1
-            except Exception as e:
-                self.logger.log(f"ERROR: {file_path.name} - {e}")
+            except Exception as exc:
+                self.logger.log(f"ERROR: {file_path.name} - {exc}")
                 error_count += 1
-                
-            self.progress.emit(i + 1, total, file_path.name)
-            
+            self.progress.emit(index + 1, total, file_path.name)
+
         self.mover.end_batch()
-        self.finished.emit(success_count, error_count)
+        self.completed.emit(success_count, error_count)
+
 
 class DedupeThread(QThread):
     progress = pyqtSignal(int, int, str)
-    finished = pyqtSignal(list)
+    completed = pyqtSignal(list)
+    failed = pyqtSignal(str)
 
     def __init__(self, target_dir):
         super().__init__()
@@ -78,58 +168,288 @@ class DedupeThread(QThread):
         self.deduplicator = Deduplicator()
 
     def run(self):
-        def callback(current, total, name):
-            self.progress.emit(current, total, name)
-            
-        duplicates = self.deduplicator.find_duplicates(self.target_dir, callback)
-        self.finished.emit(duplicates)
+        try:
+            duplicates = self.deduplicator.find_duplicates(
+                self.target_dir,
+                lambda current, total, name: self.progress.emit(current, total, name),
+            )
+            self.completed.emit(duplicates)
+        except Exception as exc:
+            self.failed.emit(f"Không thể quét tệp trùng lặp: {exc}")
+
+
+class CategoryEditorDialog(QDialog):
+    def __init__(self, category="", extensions=None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Thông tin quy tắc")
+        self.setModal(True)
+        self.setFixedWidth(460)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(26, 24, 26, 24)
+        layout.setSpacing(14)
+
+        eyebrow = QLabel("QUY TẮC PHÂN LOẠI")
+        eyebrow.setObjectName("DialogEyebrow")
+        title = QLabel("Thiết lập nhóm tệp")
+        title.setObjectName("DialogTitle")
+        hint = QLabel("Đặt tên thư mục đích và nhập các phần mở rộng, cách nhau bằng dấu phẩy.")
+        hint.setObjectName("DialogSubtitle")
+        hint.setWordWrap(True)
+        layout.addWidget(eyebrow)
+        layout.addWidget(title)
+        layout.addWidget(hint)
+
+        name_label = QLabel("Tên thư mục")
+        name_label.setObjectName("OptionTitle")
+        self.name_input = QLineEdit(category)
+        self.name_input.setPlaceholderText("Ví dụ: Documents")
+        layout.addWidget(name_label)
+        layout.addWidget(self.name_input)
+
+        extension_label = QLabel("Phần mở rộng")
+        extension_label.setObjectName("OptionTitle")
+        self.extension_input = QLineEdit(", ".join(extensions or []))
+        self.extension_input.setPlaceholderText(".pdf, .docx, .txt")
+        layout.addWidget(extension_label)
+        layout.addWidget(self.extension_input)
+
+        actions = QHBoxLayout()
+        actions.addStretch()
+        cancel_button = QPushButton("Hủy")
+        cancel_button.setObjectName("DialogButton")
+        cancel_button.clicked.connect(self.reject)
+        save_button = QPushButton("Xác nhận")
+        save_button.setObjectName("PrimaryButton")
+        save_button.clicked.connect(self.validate_and_accept)
+        actions.addWidget(cancel_button)
+        actions.addWidget(save_button)
+        layout.addLayout(actions)
+
+    def validate_and_accept(self):
+        category = self.name_input.text().strip()
+        extensions = self.normalized_extensions()
+        if not category:
+            QMessageBox.warning(self, "Thiếu thông tin", "Vui lòng nhập tên thư mục đích.")
+            self.name_input.setFocus()
+            return
+        if not extensions:
+            QMessageBox.warning(self, "Thiếu thông tin", "Vui lòng nhập ít nhất một phần mở rộng.")
+            self.extension_input.setFocus()
+            return
+        self.accept()
+
+    def normalized_extensions(self):
+        normalized = []
+        for raw_value in self.extension_input.text().split(","):
+            value = raw_value.strip().lower()
+            if not value:
+                continue
+            if not value.startswith("."):
+                value = f".{value}"
+            if value not in normalized:
+                normalized.append(value)
+        return normalized
+
+    def values(self):
+        return self.name_input.text().strip(), self.normalized_extensions()
+
 
 class SettingsDialog(QDialog):
     def __init__(self, config_manager, parent=None):
         super().__init__(parent)
         self.config_manager = config_manager
-        self.file_map = self.config_manager.get_file_map()
-        self.setWindowTitle("Cài đặt phân loại")
-        self.resize(400, 300)
+        self.file_map = deepcopy(self.config_manager.get_file_map())
+        self.setWindowTitle("Quy tắc phân loại")
+        self.setModal(True)
+        self.resize(760, 610)
+        self.setMinimumSize(650, 520)
         self.init_ui()
-        
+
     def init_ui(self):
-        layout = QVBoxLayout()
-        self.list_widget = QListWidget()
-        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(30, 28, 30, 26)
+        layout.setSpacing(18)
+
+        eyebrow = QLabel("CÁ NHÂN HÓA")
+        eyebrow.setObjectName("DialogEyebrow")
+        title = QLabel("Quy tắc phân loại")
+        title.setObjectName("DialogTitle")
+        subtitle = QLabel(
+            "Mỗi phần mở rộng chỉ nên thuộc một nhóm. Nhấp đúp vào một hàng để chỉnh sửa nhanh."
+        )
+        subtitle.setObjectName("DialogSubtitle")
+        subtitle.setWordWrap(True)
+        layout.addWidget(eyebrow)
+        layout.addWidget(title)
+        layout.addWidget(subtitle)
+
+        self.table = QTableWidget(0, 2)
+        self.table.setHorizontalHeaderLabels(["THƯ MỤC ĐÍCH", "PHẦN MỞ RỘNG"])
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setAlternatingRowColors(True)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.setShowGrid(False)
+        self.table.setMinimumHeight(300)
+        self.table.doubleClicked.connect(self.edit_category)
+        layout.addWidget(self.table, 1)
+        self.populate_table()
+
+        toolbar = QHBoxLayout()
+        add_button = QPushButton("+  Thêm nhóm")
+        add_button.setObjectName("LinkButton")
+        add_button.clicked.connect(self.add_category)
+        edit_button = QPushButton("Chỉnh sửa")
+        edit_button.setObjectName("SecondaryButton")
+        edit_button.clicked.connect(self.edit_category)
+        remove_button = QPushButton("Xóa nhóm")
+        remove_button.setObjectName("GhostDanger")
+        remove_button.clicked.connect(self.remove_category)
+        reset_button = QPushButton("Khôi phục mặc định")
+        reset_button.setObjectName("SecondaryButton")
+        reset_button.clicked.connect(self.reset_defaults)
+        toolbar.addWidget(add_button)
+        toolbar.addWidget(edit_button)
+        toolbar.addWidget(remove_button)
+        toolbar.addStretch()
+        toolbar.addWidget(reset_button)
+        layout.addLayout(toolbar)
+
+        footer = QHBoxLayout()
+        self.rule_count_label = QLabel()
+        self.rule_count_label.setObjectName("MutedText")
+        footer.addWidget(self.rule_count_label)
+        footer.addStretch()
+        cancel_button = QPushButton("Hủy thay đổi")
+        cancel_button.setObjectName("DialogButton")
+        cancel_button.clicked.connect(self.reject)
+        save_button = QPushButton("Lưu quy tắc")
+        save_button.setObjectName("PrimaryButton")
+        save_button.clicked.connect(self.save_settings)
+        footer.addWidget(cancel_button)
+        footer.addWidget(save_button)
+        layout.addLayout(footer)
+        self.update_rule_count()
+
+    def populate_table(self):
+        self.table.setRowCount(0)
         for category, extensions in self.file_map.items():
-            ext_str = ", ".join(extensions)
-            self.list_widget.addItem(f"{category}: {ext_str}")
-            
-        layout.addWidget(QLabel("Danh sách phân loại (Tên Thư Mục: .ext1, .ext2):"))
-        layout.addWidget(self.list_widget)
-        
-        btn_layout = QHBoxLayout()
-        add_btn = QPushButton("Thêm")
-        add_btn.clicked.connect(self.add_category)
-        save_btn = QPushButton("Lưu")
-        save_btn.clicked.connect(self.save_settings)
-        
-        btn_layout.addWidget(add_btn)
-        btn_layout.addWidget(save_btn)
-        layout.addLayout(btn_layout)
-        self.setLayout(layout)
-        
+            self.append_row(category, extensions)
+
+    def append_row(self, category, extensions):
+        row = self.table.rowCount()
+        self.table.insertRow(row)
+        category_item = QTableWidgetItem(category)
+        category_item.setData(Qt.ItemDataRole.UserRole, list(extensions))
+        extension_item = QTableWidgetItem(", ".join(extensions))
+        self.table.setItem(row, 0, category_item)
+        self.table.setItem(row, 1, extension_item)
+        self.table.setRowHeight(row, 45)
+
     def add_category(self):
-        text, ok = QInputDialog.getText(self, "Thêm loại", "Nhập theo định dạng 'Tên: .ext1, .ext2'")
-        if ok and text:
-            self.list_widget.addItem(text)
-            
+        dialog = CategoryEditorDialog(parent=self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            category, extensions = dialog.values()
+            existing = [self.table.item(row, 0).text().casefold() for row in range(self.table.rowCount())]
+            if category.casefold() in existing:
+                QMessageBox.warning(self, "Tên đã tồn tại", "Đã có một nhóm với tên này.")
+                return
+            self.append_row(category, extensions)
+            self.table.selectRow(self.table.rowCount() - 1)
+            self.update_rule_count()
+
+    def edit_category(self, _index=None):
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Chọn một nhóm", "Hãy chọn nhóm bạn muốn chỉnh sửa.")
+            return
+        old_name = self.table.item(row, 0).text()
+        extensions = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+        dialog = CategoryEditorDialog(old_name, extensions, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            category, new_extensions = dialog.values()
+            duplicates = [
+                self.table.item(index, 0).text().casefold()
+                for index in range(self.table.rowCount())
+                if index != row
+            ]
+            if category.casefold() in duplicates:
+                QMessageBox.warning(self, "Tên đã tồn tại", "Đã có một nhóm với tên này.")
+                return
+            self.table.item(row, 0).setText(category)
+            self.table.item(row, 0).setData(Qt.ItemDataRole.UserRole, new_extensions)
+            self.table.item(row, 1).setText(", ".join(new_extensions))
+            self.update_rule_count()
+
+    def remove_category(self):
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Chọn một nhóm", "Hãy chọn nhóm bạn muốn xóa.")
+            return
+        category = self.table.item(row, 0).text()
+        reply = QMessageBox.question(
+            self,
+            "Xóa quy tắc",
+            f"Xóa nhóm “{category}” khỏi danh sách phân loại?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.table.removeRow(row)
+            self.update_rule_count()
+
+    def reset_defaults(self):
+        reply = QMessageBox.question(
+            self,
+            "Khôi phục mặc định",
+            "Thay toàn bộ danh sách hiện tại bằng bộ quy tắc mặc định?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.file_map = deepcopy(DEFAULT_CONFIG["file_map"])
+            self.populate_table()
+            self.update_rule_count()
+
+    def update_rule_count(self):
+        extension_count = sum(
+            len(self.table.item(row, 0).data(Qt.ItemDataRole.UserRole) or [])
+            for row in range(self.table.rowCount())
+        )
+        self.rule_count_label.setText(f"{self.table.rowCount()} nhóm · {extension_count} phần mở rộng")
+
     def save_settings(self):
-        new_map = {}
-        for i in range(self.list_widget.count()):
-            item = self.list_widget.item(i).text()
-            if ":" in item:
-                cat, exts = item.split(":", 1)
-                ext_list = [e.strip() for e in exts.split(",") if e.strip().startswith(".")]
-                new_map[cat.strip()] = ext_list
-        self.config_manager.set_file_map(new_map)
+        file_map = {}
+        seen_extensions = {}
+        conflicts = []
+        for row in range(self.table.rowCount()):
+            category = self.table.item(row, 0).text().strip()
+            extensions = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole) or []
+            file_map[category] = list(extensions)
+            for extension in extensions:
+                if extension in seen_extensions:
+                    conflicts.append(f"{extension} ({seen_extensions[extension]} / {category})")
+                else:
+                    seen_extensions[extension] = category
+
+        if not file_map:
+            QMessageBox.warning(self, "Danh sách trống", "Cần giữ lại ít nhất một nhóm phân loại.")
+            return
+        if conflicts:
+            preview = ", ".join(conflicts[:5])
+            QMessageBox.warning(
+                self,
+                "Phần mở rộng bị trùng",
+                f"Mỗi phần mở rộng chỉ nên thuộc một nhóm:\n{preview}",
+            )
+            return
+        self.config_manager.set_file_map(file_map)
         self.accept()
+
 
 class DedupeDialog(QDialog):
     def __init__(self, duplicates, logger, mover, target_dir, parent=None):
@@ -138,149 +458,170 @@ class DedupeDialog(QDialog):
         self.logger = logger
         self.mover = mover
         self.target_dir = Path(target_dir)
-        self.to_delete = []
+        self.group_buttons = []
+        self.setWindowTitle("Xử lý tệp trùng lặp")
+        self.setModal(True)
+        self.resize(820, 680)
+        self.setMinimumSize(700, 560)
         self.init_ui()
 
     def init_ui(self):
-        self.setWindowTitle("Xóa File Trùng Lặp")
-        self.resize(550, 450)
-        
         layout = QVBoxLayout(self)
-        
-        # Info label
-        info_label = QLabel("Chọn file bạn muốn GIỮ LẠI trong mỗi nhóm.\nBạn có thể chuyển file không chọn vào Thùng Rác hoặc Xóa Vĩnh Viễn.")
-        info_label.setStyleSheet("color: #dc3545; font-weight: bold; margin-bottom: 5px;")
-        layout.addWidget(info_label)
-        
+        layout.setContentsMargins(30, 28, 30, 26)
+        layout.setSpacing(16)
+
+        eyebrow = QLabel("DỌN DẸP AN TOÀN")
+        eyebrow.setObjectName("DialogEyebrow")
+        title = QLabel("Chọn bản cần giữ lại")
+        title.setObjectName("DialogTitle")
+        duplicate_files = sum(len(group) for group in self.duplicates)
+        subtitle = QLabel(
+            f"Phát hiện {len(self.duplicates)} nhóm với {duplicate_files} tệp. "
+            "PADOrganizer đã chọn sẵn tên tệp ngắn gọn nhất; bạn có thể đổi lựa chọn hoặc bỏ qua từng nhóm."
+        )
+        subtitle.setObjectName("DialogSubtitle")
+        subtitle.setWordWrap(True)
+        layout.addWidget(eyebrow)
+        layout.addWidget(title)
+        layout.addWidget(subtitle)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        content_widget = QWidget()
-        content_layout = QVBoxLayout(content_widget)
-        
-        self.group_buttons = []
-        
-        for i, group in enumerate(self.duplicates):
-            group_box = QGroupBox(f"Nhóm trùng lặp {i+1} ({len(group)} files)")
-            group_layout = QVBoxLayout()
-            
-            # Sắp xếp để file có tên gốc, ngắn gọn nhất được ưu tiên (thứ tự chiều dài tên trước, từ điển sau)
-            sorted_group = sorted(group, key=lambda f: (len(f.name), f.name.lower(), str(f).lower()))
-            
-            btn_group = QButtonGroup(self)
-            
-            rb_skip = QRadioButton("⏭️ Bỏ qua nhóm này (Không xóa file nào)")
-            rb_skip.file_path = None
-            rb_skip.setStyleSheet("""
-                QRadioButton { color: #6c757d; font-style: italic; }
-                QRadioButton:checked { color: #dc3545; font-weight: bold; font-style: normal; }
-            """)
-            btn_group.addButton(rb_skip)
-            group_layout.addWidget(rb_skip)
-            
-            for j, f in enumerate(sorted_group):
-                size_kb = f.stat().st_size / 1024
-                # Hiển thị tên file và thư mục chứa nó
-                rb = QRadioButton(f"{f.name} ({f.parent.name}) - {size_kb:.1f} KB")
-                rb.file_path = f
-                
-                # Mặc định giữ file có tên nhỏ nhất (phần tử đầu tiên)
-                if j == 0:
-                    rb.setChecked(True)
-                
-                btn_group.addButton(rb)
-                group_layout.addWidget(rb)
-                
-            self.group_buttons.append(btn_group)
-            group_box.setLayout(group_layout)
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(2, 2, 8, 2)
+        content_layout.setSpacing(12)
+
+        for index, group in enumerate(self.duplicates):
+            sorted_group = sorted(group, key=lambda path: (len(path.name), path.name.lower()))
+            group_box = QGroupBox(f"NHÓM {index + 1}  ·  {len(group)} TỆP GIỐNG NHAU")
+            group_layout = QVBoxLayout(group_box)
+            group_layout.setSpacing(6)
+
+            button_group = QButtonGroup(self)
+            skip_button = QRadioButton("Bỏ qua nhóm này — không tác động tệp nào")
+            skip_button.file_path = None
+            button_group.addButton(skip_button)
+            group_layout.addWidget(skip_button)
+
+            for file_index, file_path in enumerate(sorted_group):
+                try:
+                    size_text = format_bytes(file_path.stat().st_size)
+                except OSError:
+                    size_text = "Không rõ dung lượng"
+                radio = QRadioButton(f"Giữ lại  {file_path.name}   ·   {size_text}")
+                radio.file_path = file_path
+                radio.setToolTip(str(file_path))
+                if file_index == 0:
+                    radio.setChecked(True)
+                button_group.addButton(radio)
+                group_layout.addWidget(radio)
+
+            button_group.buttonToggled.connect(self.update_selection_summary)
+            self.group_buttons.append(button_group)
             content_layout.addWidget(group_box)
-            
-        content_widget.setLayout(content_layout)
-        scroll.setWidget(content_widget)
-        layout.addWidget(scroll)
-        
-        btn_layout = QHBoxLayout()
-        btn_trash = QPushButton("🗑️ Chuyển vào Thùng rác")
-        btn_trash.setStyleSheet("""
-            QPushButton { background-color: #ffc107; color: #212529; }
-            QPushButton:hover { background-color: #e0a800; }
-        """)
-        btn_trash.clicked.connect(lambda: self.process_deletion(permanent=False))
-        
-        btn_delete = QPushButton("💥 Xóa Vĩnh Viễn")
-        btn_delete.setStyleSheet("""
-            QPushButton { background-color: #dc3545; color: white; }
-            QPushButton:hover { background-color: #c82333; }
-        """)
-        btn_delete.clicked.connect(lambda: self.process_deletion(permanent=True))
-        
-        btn_cancel = QPushButton("Hủy")
-        btn_cancel.setStyleSheet("""
-            QPushButton { background-color: #6c757d; color: white; }
-            QPushButton:hover { background-color: #5a6268; }
-        """)
-        btn_cancel.clicked.connect(self.reject)
-        
-        btn_layout.addWidget(btn_trash)
-        btn_layout.addWidget(btn_delete)
-        btn_layout.addWidget(btn_cancel)
-        layout.addLayout(btn_layout)
+
+        content_layout.addStretch()
+        scroll.setWidget(content)
+        layout.addWidget(scroll, 1)
+
+        footer = QHBoxLayout()
+        self.selection_summary = QLabel()
+        self.selection_summary.setObjectName("MutedText")
+        footer.addWidget(self.selection_summary)
+        footer.addStretch()
+        cancel_button = QPushButton("Để sau")
+        cancel_button.setObjectName("DialogButton")
+        cancel_button.clicked.connect(self.reject)
+        trash_button = QPushButton("Chuyển vào thùng rác")
+        trash_button.setObjectName("SecondaryButton")
+        trash_button.clicked.connect(lambda: self.process_deletion(permanent=False))
+        delete_button = QPushButton("Xóa vĩnh viễn")
+        delete_button.setObjectName("DangerButton")
+        delete_button.clicked.connect(lambda: self.process_deletion(permanent=True))
+        footer.addWidget(cancel_button)
+        footer.addWidget(trash_button)
+        footer.addWidget(delete_button)
+        layout.addLayout(footer)
+        self.update_selection_summary()
+
+    def selected_files_to_remove(self):
+        selected = []
+        for group, button_group in zip(self.duplicates, self.group_buttons):
+            checked = button_group.checkedButton()
+            if checked is None or checked.file_path is None:
+                continue
+            selected.extend(path for path in group if path != checked.file_path)
+        return selected
+
+    def update_selection_summary(self, *_args):
+        selected = self.selected_files_to_remove()
+        reclaimable = 0
+        for path in selected:
+            try:
+                reclaimable += path.stat().st_size
+            except OSError:
+                pass
+        self.selection_summary.setText(
+            f"Sẽ xử lý {len(selected)} tệp · có thể giải phóng {format_bytes(reclaimable)}"
+        )
 
     def process_deletion(self, permanent=False):
-        self.to_delete.clear()
-        # Tìm các file không được checked
-        for i, group in enumerate(self.duplicates):
-            btn_group = self.group_buttons[i]
-            checked_btn = btn_group.checkedButton()
-            
-            if checked_btn is None or checked_btn.file_path is None:
-                continue
-                
-            for f in group:
-                if f != checked_btn.file_path:
-                    self.to_delete.append(f)
-                    
-        if not self.to_delete:
-            QMessageBox.information(self, "Thông báo", "Không có file nào bị xóa.")
-            self.reject()
+        files_to_remove = self.selected_files_to_remove()
+        if not files_to_remove:
+            QMessageBox.information(self, "Không có thay đổi", "Bạn đang bỏ qua tất cả các nhóm.")
             return
-            
+
         if permanent:
-            reply = QMessageBox.question(self, "Cảnh báo Xóa Vĩnh Viễn", f"Bạn có chắc muốn XÓA VĨNH VIỄN {len(self.to_delete)} file?\n(KHÔNG THỂ KHÔI PHỤC)", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-            if reply == QMessageBox.StandardButton.Yes:
-                deleted_count = 0
-                for f in self.to_delete:
-                    try:
-                        f.unlink()
-                        deleted_count += 1
-                        self.logger.log(f"PERMANENT DELETED: {f.name}")
-                    except Exception as e:
-                        self.logger.log(f"PERM DELETE ERROR: Không thể xóa {f.name} - {e}")
-                QMessageBox.information(self, "Thành công", f"Đã xóa vĩnh viễn {deleted_count} file rác.")
-                self.accept()
+            reply = QMessageBox.warning(
+                self,
+                "Xóa vĩnh viễn",
+                f"Xóa vĩnh viễn {len(files_to_remove)} tệp? Thao tác này không thể hoàn tác.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
         else:
-            reply = QMessageBox.question(self, "Chuyển vào Thùng rác", f"Bạn có chắc muốn chuyển {len(self.to_delete)} file vào PADOrganizer_Trash không?\n(Bạn có thể mở PADOrganizer_Trash để lấy lại sau)", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-            if reply == QMessageBox.StandardButton.Yes:
-                if not PAD_TRASH_DIR.exists():
-                    PAD_TRASH_DIR.mkdir(parents=True)
-                
-                self.mover.start_batch()
-                deleted_count = 0
-                for f in self.to_delete:
-                    try:
-                        f_name = f.name
-                        new_path = self.mover.move_file(f, PAD_TRASH_DIR, sort_by_date=False)
-                        self.logger.log(f"TRASHED: {f_name} -> {new_path.name}")
-                        deleted_count += 1
-                    except Exception as e:
-                        self.logger.log(f"TRASH ERROR: Không thể chuyển {f.name} - {e}")
-                self.mover.end_batch()
-                        
-                QMessageBox.information(self, "Thành công", f"Đã chuyển {deleted_count} file trùng lặp vào PADOrganizer_Trash.")
-                if self.parent() and hasattr(self.parent(), 'btn_undo'):
-                    self.parent().btn_undo.setEnabled(True)
-                    if hasattr(self.parent(), 'check_trash_exists'):
-                        self.parent().check_trash_exists()
-                self.accept()
+            reply = QMessageBox.question(
+                self,
+                "Chuyển vào thùng rác",
+                f"Chuyển {len(files_to_remove)} tệp vào PADOrganizer_Trash? Bạn có thể lấy lại chúng sau.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        success = 0
+        errors = 0
+        if permanent:
+            for file_path in files_to_remove:
+                try:
+                    file_path.unlink()
+                    self.logger.log(f"PERMANENT DELETED: {file_path.name}")
+                    success += 1
+                except Exception as exc:
+                    self.logger.log(f"PERM DELETE ERROR: {file_path.name} - {exc}")
+                    errors += 1
+        else:
+            PAD_TRASH_DIR.mkdir(parents=True, exist_ok=True)
+            self.mover.start_batch()
+            for file_path in files_to_remove:
+                try:
+                    new_path = self.mover.move_file(file_path, PAD_TRASH_DIR, sort_by_date=False)
+                    self.logger.log(f"TRASHED: {file_path.name} -> {new_path.name}")
+                    success += 1
+                except Exception as exc:
+                    self.logger.log(f"TRASH ERROR: {file_path.name} - {exc}")
+                    errors += 1
+            self.mover.end_batch()
+
+        QMessageBox.information(
+            self,
+            "Đã xử lý xong",
+            f"Thành công: {success}\nLỗi: {errors}",
+        )
+        self.accept()
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -289,290 +630,783 @@ class MainWindow(QMainWindow):
         self.logger = PADLogger()
         self.mover = FileMover()
         self.target_dir = ""
+        self.is_busy = False
+        self.shortcuts = []
         self.init_ui()
+        self.install_shortcuts()
+        self.refresh_rule_summary()
+        self.refresh_directory_summary()
 
     def init_ui(self):
         self.setWindowTitle(APP_FULL_NAME)
-        self.resize(600, 400)
-        
-        icon_path = get_resource_path('logo.ico')
+        self.setMinimumSize(980, 700)
+        self.resize(1220, 820)
+        self.setAcceptDrops(True)
+
+        icon_path = get_resource_path("logo.ico")
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
-        
-        # Sửa màu sắc để dễ nhìn hơn, tương phản cao, hiện đại
-        self.setStyleSheet("""
-            QMainWindow, QDialog { background-color: #ffffff; color: #111111; }
-            QLabel { color: #111111; font-size: 14px; }
-            QCheckBox { color: #111111; font-size: 14px; }
-            QRadioButton { color: #555555; font-size: 13px; }
-            QRadioButton:checked { color: #28a745; font-weight: bold; }
-            QGroupBox { font-weight: bold; color: #0056b3; border: 1px solid #cccccc; border-radius: 5px; margin-top: 15px; padding-top: 15px;}
-            QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px 0 5px; }
-            QPushButton { 
-                background-color: #007bff; color: white; 
-                border-radius: 6px; padding: 8px 16px; font-weight: bold; border: none;
-            }
-            QPushButton:hover { background-color: #0056b3; }
-            QPushButton:disabled { background-color: #e0e0e0; color: #888888; }
-            QProgressBar { text-align: center; border-radius: 5px; color: black; font-weight: bold; border: 1px solid #ccc; background-color: #f8f9fa;}
-            QProgressBar::chunk { background-color: #28a745; border-radius: 4px; }
-            QListWidget { background-color: #f8f9fa; color: #111111; border: 1px solid #ccc; border-radius: 5px; }
-            QScrollArea { border: none; }
-        """)
 
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(25, 25, 25, 25)
-        main_layout.setSpacing(15)
+        root = QWidget()
+        root.setObjectName("AppRoot")
+        self.setCentralWidget(root)
+        root_layout = QHBoxLayout(root)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
 
-        title = QLabel(APP_NAME)
-        title.setFont(QFont("Segoe UI", 22, QFont.Weight.Bold))
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet("color: #0056b3;")
-        main_layout.addWidget(title)
+        self.build_sidebar(root_layout)
+        self.build_content(root_layout)
 
-        subtitle = QLabel("Personal Archive Directory Organizer")
-        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        subtitle.setStyleSheet("color: #5f6b7a; margin-bottom: 10px;")
-        main_layout.addWidget(subtitle)
+    def build_sidebar(self, root_layout):
+        self.sidebar = QFrame()
+        self.sidebar.setObjectName("Sidebar")
+        self.sidebar.setFixedWidth(238)
+        side_layout = QVBoxLayout(self.sidebar)
+        side_layout.setContentsMargins(22, 24, 22, 22)
+        side_layout.setSpacing(8)
 
-        dir_layout = QHBoxLayout()
-        self.dir_label = QLabel("Chưa chọn thư mục")
-        self.dir_label.setStyleSheet("color: #333333; background: #f8f9fa; padding: 8px; border: 1px solid #ced4da; border-radius: 5px; font-weight: bold;")
-        btn_select = QPushButton("Mở Thư Mục")
-        btn_select.setStyleSheet("background-color: #6c757d;")
-        btn_select.clicked.connect(self.select_directory)
-        dir_layout.addWidget(self.dir_label, 1)
-        dir_layout.addWidget(btn_select)
-        main_layout.addLayout(dir_layout)
+        brand = QHBoxLayout()
+        brand.setSpacing(11)
+        mark = QFrame()
+        mark.setObjectName("BrandMark")
+        mark.setFixedSize(43, 43)
+        mark_layout = QVBoxLayout(mark)
+        mark_layout.setContentsMargins(0, 0, 0, 0)
+        mark_letter = QLabel("P")
+        mark_letter.setObjectName("BrandLetter")
+        mark_letter.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        mark_layout.addWidget(mark_letter)
+        brand_text = QVBoxLayout()
+        brand_text.setSpacing(0)
+        brand_title = QLabel(APP_NAME)
+        brand_title.setObjectName("BrandTitle")
+        brand_caption = QLabel("PERSONAL ARCHIVE")
+        brand_caption.setObjectName("BrandCaption")
+        brand_text.addWidget(brand_title)
+        brand_text.addWidget(brand_caption)
+        brand.addWidget(mark)
+        brand.addLayout(brand_text)
+        brand.addStretch()
+        side_layout.addLayout(brand)
+        side_layout.addSpacing(30)
 
-        opt_layout = QHBoxLayout()
-        self.chk_date = QCheckBox("Tạo thư mục theo Năm-Tháng")
-        self.chk_date.setChecked(self.config_manager.is_sort_by_date_enabled())
-        self.chk_date.stateChanged.connect(self.save_date_setting)
-        btn_settings = QPushButton("⚙️ Cài Đặt Quy Tắc")
-        btn_settings.setStyleSheet("""
-            QPushButton { background-color: #6c757d; color: white; }
-            QPushButton:hover { background-color: #5a6268; }
-        """)
-        btn_settings.clicked.connect(self.open_settings)
-        opt_layout.addWidget(self.chk_date)
-        opt_layout.addStretch()
-        opt_layout.addWidget(btn_settings)
-        main_layout.addLayout(opt_layout)
+        section = QLabel("KHÔNG GIAN LÀM VIỆC")
+        section.setObjectName("SidebarSection")
+        side_layout.addWidget(section)
 
-        self.progress = QProgressBar()
-        self.progress.setValue(0)
-        self.progress.setFixedHeight(25)
-        main_layout.addWidget(self.progress)
-        
-        self.status_label = QLabel("Sẵn sàng")
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status_label.setStyleSheet("font-style: italic; color: #555555;")
-        main_layout.addWidget(self.status_label)
+        dashboard_button = QPushButton("Tổng quan")
+        dashboard_button.setObjectName("SidebarActive")
+        dashboard_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        side_layout.addWidget(dashboard_button)
 
-        action_layout = QHBoxLayout()
-        action_layout.setSpacing(10)
-        
-        self.btn_run = QPushButton("🚀 Bắt Đầu Dọn Dẹp")
-        self.btn_run.clicked.connect(self.run_organizer)
-        self.btn_run.setMinimumHeight(45)
-        
-        self.btn_undo = QPushButton("↩️ Hoàn Tác")
-        self.btn_undo.setStyleSheet("""
-            QPushButton { background-color: #ffc107; color: #212529; border-radius: 6px; padding: 8px; font-weight: bold; border: none; }
-            QPushButton:hover { background-color: #e0a800; }
-            QPushButton:disabled { background-color: #e0e0e0; color: #888888; }
-        """)
-        self.btn_undo.clicked.connect(self.undo_action)
-        self.btn_undo.setEnabled(False)
-        self.btn_undo.setMinimumHeight(45)
-        
-        self.btn_dedupe = QPushButton("🗑️ Dọn File Trùng")
-        self.btn_dedupe.setStyleSheet("""
-            QPushButton { background-color: #17a2b8; color: white; border-radius: 6px; padding: 8px; font-weight: bold; border: none; }
-            QPushButton:hover { background-color: #138496; }
-            QPushButton:disabled { background-color: #e0e0e0; color: #888888; }
-        """)
-        self.btn_dedupe.clicked.connect(self.run_dedupe)
-        self.btn_dedupe.setMinimumHeight(45)
+        self.side_rules_button = QPushButton("Quy tắc phân loại")
+        self.side_rules_button.setObjectName("SidebarButton")
+        self.side_rules_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.side_rules_button.clicked.connect(self.open_settings)
+        side_layout.addWidget(self.side_rules_button)
 
-        trash_layout = QVBoxLayout()
-        trash_layout.setSpacing(5)
-        self.btn_open_trash = QPushButton("📂 Mở Thùng Rác")
-        self.btn_open_trash.setStyleSheet("""
-            QPushButton { background-color: #17a2b8; color: white; padding: 4px; border-radius: 4px; font-weight: bold; border: none; }
-            QPushButton:hover { background-color: #138496; }
-        """)
+        self.btn_open_trash = QPushButton("Mở thùng rác")
+        self.btn_open_trash.setObjectName("SidebarButton")
+        self.btn_open_trash.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_open_trash.clicked.connect(self.open_trash)
-        self.btn_open_trash.setEnabled(True)
-        
-        self.btn_empty_trash = QPushButton("🔥 Dọn Rác")
-        self.btn_empty_trash.setStyleSheet("""
-            QPushButton { background-color: #dc3545; color: white; padding: 4px; border-radius: 4px; font-weight: bold; border: none; }
-            QPushButton:hover { background-color: #c82333; }
-            QPushButton:disabled { background-color: #e0e0e0; color: #888888; }
-        """)
+        side_layout.addWidget(self.btn_open_trash)
+
+        self.btn_empty_trash = QPushButton("Dọn sạch thùng rác")
+        self.btn_empty_trash.setObjectName("SidebarDanger")
+        self.btn_empty_trash.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_empty_trash.clicked.connect(self.empty_trash)
-        self.btn_empty_trash.setEnabled(False)
-        
-        trash_layout.addWidget(self.btn_open_trash)
-        trash_layout.addWidget(self.btn_empty_trash)
+        side_layout.addWidget(self.btn_empty_trash)
 
-        action_layout.addWidget(self.btn_run, 3) 
-        action_layout.addWidget(self.btn_undo, 2)
-        action_layout.addWidget(self.btn_dedupe, 2)
-        action_layout.addLayout(trash_layout, 2)
-        main_layout.addLayout(action_layout)
+        side_layout.addStretch()
+        privacy = QFrame()
+        privacy.setObjectName("PrivacyCard")
+        privacy_layout = QHBoxLayout(privacy)
+        privacy_layout.setContentsMargins(13, 12, 13, 12)
+        privacy_layout.setSpacing(9)
+        privacy_dot = QLabel("•")
+        privacy_dot.setObjectName("PrivacyDot")
+        privacy_text = QVBoxLayout()
+        privacy_text.setSpacing(2)
+        privacy_title = QLabel("Riêng tư tuyệt đối")
+        privacy_title.setObjectName("PrivacyTitle")
+        privacy_hint = QLabel("Xử lý cục bộ trên máy\nKhông tải dữ liệu lên mạng")
+        privacy_hint.setObjectName("PrivacyText")
+        privacy_text.addWidget(privacy_title)
+        privacy_text.addWidget(privacy_hint)
+        privacy_layout.addWidget(privacy_dot, 0, Qt.AlignmentFlag.AlignTop)
+        privacy_layout.addLayout(privacy_text)
+        side_layout.addWidget(privacy)
+        root_layout.addWidget(self.sidebar)
 
-    def save_date_setting(self, state):
-        self.config_manager.set_sort_by_date(state == Qt.CheckState.Checked.value)
+    def build_content(self, root_layout):
+        scroll = QScrollArea()
+        scroll.setObjectName("MainScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        content = QWidget()
+        content.setObjectName("ScrollContent")
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(34, 28, 34, 32)
+        layout.setSpacing(20)
+
+        header = QHBoxLayout()
+        heading = QVBoxLayout()
+        heading.setSpacing(3)
+        eyebrow = QLabel("TRUNG TÂM SẮP XẾP")
+        eyebrow.setObjectName("PageEyebrow")
+        title = QLabel("Không gian của bạn, ngăn nắp hơn.")
+        title.setObjectName("PageTitle")
+        subtitle = QLabel("Một luồng làm việc rõ ràng để phân loại, tìm bản trùng và khôi phục khi cần.")
+        subtitle.setObjectName("PageSubtitle")
+        heading.addWidget(eyebrow)
+        heading.addWidget(title)
+        heading.addWidget(subtitle)
+        header.addLayout(heading)
+        header.addStretch()
+        self.status_pill = QLabel("Sẵn sàng")
+        self.status_pill.setObjectName("StatusPill")
+        self.status_pill.setProperty("state", "ready")
+        header.addWidget(self.status_pill, 0, Qt.AlignmentFlag.AlignTop)
+        layout.addLayout(header)
+
+        hero = QFrame()
+        hero.setObjectName("HeroCard")
+        self.hero_layout = QHBoxLayout(hero)
+        self.hero_layout.setContentsMargins(28, 25, 28, 25)
+        self.hero_layout.setSpacing(24)
+        hero_copy = QVBoxLayout()
+        hero_copy.setSpacing(7)
+        hero_kicker = QLabel("PADORGANIZER · LOCAL FIRST")
+        hero_kicker.setObjectName("HeroKicker")
+        hero_title = QLabel("Dọn một lần. Nhẹ đầu cả ngày.")
+        hero_title.setObjectName("HeroTitle")
+        hero_text = QLabel(
+            "Chọn một thư mục, xem nhanh quy mô và để PADOrganizer đưa từng tệp về đúng chỗ."
+        )
+        hero_text.setObjectName("HeroText")
+        hero_text.setWordWrap(True)
+        hero_copy.addWidget(hero_kicker)
+        hero_copy.addWidget(hero_title)
+        hero_copy.addWidget(hero_text)
+        hero_copy.addStretch()
+        self.hero_layout.addLayout(hero_copy, 1)
+
+        metrics = QHBoxLayout()
+        metrics.setSpacing(10)
+        folder_metric, self.hero_folder_value = self.make_hero_metric("THƯ MỤC", "Chưa chọn")
+        rules_metric, self.hero_rules_value = self.make_hero_metric("NHÓM QUY TẮC", "0")
+        files_metric, self.hero_files_value = self.make_hero_metric("TỆP SẴN SÀNG", "—", accent=True)
+        metrics.addWidget(folder_metric)
+        metrics.addWidget(rules_metric)
+        metrics.addWidget(files_metric)
+        self.hero_layout.addLayout(metrics)
+        add_shadow(hero, 40, 12, 42)
+        layout.addWidget(hero)
+
+        self.cards_layout = QHBoxLayout()
+        self.cards_layout.setSpacing(18)
+        source_card = self.build_source_card()
+        tool_card = self.build_tool_card()
+        self.cards_layout.addWidget(source_card, 5)
+        self.cards_layout.addWidget(tool_card, 3)
+        layout.addLayout(self.cards_layout)
+
+        action_dock = self.build_action_dock()
+        layout.addWidget(action_dock)
+        layout.addStretch()
+
+        scroll.setWidget(content)
+        root_layout.addWidget(scroll, 1)
+        self.apply_responsive_layout()
+
+    def make_hero_metric(self, label_text, value_text, accent=False):
+        frame = QFrame()
+        frame.setObjectName("HeroMetricAccent" if accent else "HeroMetric")
+        frame.setMinimumWidth(106)
+        metric_layout = QVBoxLayout(frame)
+        metric_layout.setContentsMargins(14, 12, 14, 12)
+        metric_layout.setSpacing(2)
+        value = QLabel(value_text)
+        value.setObjectName("HeroMetricValueDark" if accent else "HeroMetricValue")
+        value.setMaximumWidth(190)
+        label = QLabel(label_text)
+        label.setObjectName("HeroMetricLabelDark" if accent else "HeroMetricLabel")
+        metric_layout.addWidget(value)
+        metric_layout.addWidget(label)
+        return frame, value
+
+    def build_source_card(self):
+        card = QFrame()
+        card.setObjectName("SourceCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(22, 20, 22, 20)
+        card_layout.setSpacing(14)
+
+        heading = QHBoxLayout()
+        text = QVBoxLayout()
+        text.setSpacing(3)
+        badge = QLabel("BƯỚC 01")
+        badge.setObjectName("StepBadge")
+        badge.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        title = QLabel("Chọn không gian cần sắp xếp")
+        title.setObjectName("CardTitle")
+        description = QLabel("Chỉ các tệp nằm trực tiếp trong thư mục được xử lý.")
+        description.setObjectName("CardText")
+        text.addWidget(badge, 0, Qt.AlignmentFlag.AlignLeft)
+        text.addWidget(title)
+        text.addWidget(description)
+        heading.addLayout(text)
+        heading.addStretch()
+        card_layout.addLayout(heading)
+
+        self.dropzone = QFrame()
+        self.dropzone.setObjectName("DropZone")
+        self.dropzone.setProperty("selected", False)
+        self.dropzone.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.dropzone.mousePressEvent = self.on_dropzone_click
+        drop_layout = QHBoxLayout(self.dropzone)
+        drop_layout.setContentsMargins(16, 15, 16, 15)
+        drop_layout.setSpacing(13)
+
+        folder_mark = QFrame()
+        folder_mark.setObjectName("FolderMark")
+        folder_mark.setFixedSize(46, 46)
+        folder_mark_layout = QVBoxLayout(folder_mark)
+        folder_mark_layout.setContentsMargins(0, 0, 0, 0)
+        folder_letter = QLabel("D")
+        folder_letter.setObjectName("FolderMarkText")
+        folder_letter.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        folder_mark_layout.addWidget(folder_letter)
+        drop_layout.addWidget(folder_mark)
+
+        drop_copy = QVBoxLayout()
+        drop_copy.setSpacing(2)
+        self.folder_title_label = QLabel("Kéo thả thư mục vào đây")
+        self.folder_title_label.setObjectName("DropTitle")
+        self.folder_path_label = QLabel("hoặc chọn từ máy tính của bạn")
+        self.folder_path_label.setObjectName("DropPath")
+        self.folder_path_label.setWordWrap(True)
+        drop_copy.addWidget(self.folder_title_label)
+        drop_copy.addWidget(self.folder_path_label)
+        drop_layout.addLayout(drop_copy, 1)
+
+        self.btn_select = QPushButton("Chọn thư mục")
+        self.btn_select.setObjectName("SecondaryButton")
+        self.btn_select.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_select.clicked.connect(self.select_directory)
+        drop_layout.addWidget(self.btn_select)
+        card_layout.addWidget(self.dropzone)
+
+        stats = QHBoxLayout()
+        stats.setSpacing(10)
+        file_stat, self.file_count_label = self.make_mini_stat("TỆP TRỰC TIẾP")
+        size_stat, self.total_size_label = self.make_mini_stat("TỔNG DUNG LƯỢNG")
+        stats.addWidget(file_stat)
+        stats.addWidget(size_stat)
+        card_layout.addLayout(stats)
+        add_shadow(card, 30, 8, 25)
+        return card
+
+    def make_mini_stat(self, label_text):
+        frame = QFrame()
+        frame.setObjectName("MiniStat")
+        stat_layout = QVBoxLayout(frame)
+        stat_layout.setContentsMargins(13, 10, 13, 10)
+        stat_layout.setSpacing(1)
+        value = QLabel("—")
+        value.setObjectName("MiniStatValue")
+        label = QLabel(label_text)
+        label.setObjectName("MiniStatLabel")
+        stat_layout.addWidget(value)
+        stat_layout.addWidget(label)
+        return frame, value
+
+    def build_tool_card(self):
+        card = QFrame()
+        card.setObjectName("ToolCard")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(22, 20, 22, 20)
+        layout.setSpacing(12)
+
+        badge = QLabel("BƯỚC 02")
+        badge.setObjectName("StepBadge")
+        badge.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        title = QLabel("Tinh chỉnh cách tổ chức")
+        title.setObjectName("CardTitle")
+        description = QLabel("Mặc định an toàn, đủ linh hoạt khi bạn cần.")
+        description.setObjectName("CardText")
+        layout.addWidget(badge, 0, Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(title)
+        layout.addWidget(description)
+
+        date_row = QFrame()
+        date_row.setObjectName("OptionRow")
+        date_layout = QHBoxLayout(date_row)
+        date_layout.setContentsMargins(13, 11, 13, 11)
+        date_copy = QVBoxLayout()
+        date_copy.setSpacing(1)
+        date_title = QLabel("Chia theo Năm–Tháng")
+        date_title.setObjectName("OptionTitle")
+        date_text = QLabel("Tạo thêm tầng 2026-08 trong mỗi nhóm")
+        date_text.setObjectName("OptionText")
+        date_copy.addWidget(date_title)
+        date_copy.addWidget(date_text)
+        self.date_toggle = ToggleSwitch()
+        self.date_toggle.setChecked(self.config_manager.is_sort_by_date_enabled())
+        self.date_toggle.toggled.connect(self.save_date_setting)
+        date_layout.addLayout(date_copy, 1)
+        date_layout.addWidget(self.date_toggle)
+        layout.addWidget(date_row)
+
+        rules_row = QFrame()
+        rules_row.setObjectName("OptionRow")
+        rules_layout = QHBoxLayout(rules_row)
+        rules_layout.setContentsMargins(13, 11, 13, 11)
+        rules_copy = QVBoxLayout()
+        rules_copy.setSpacing(1)
+        rules_title = QLabel("Bộ quy tắc hiện tại")
+        rules_title.setObjectName("OptionTitle")
+        self.rules_summary_label = QLabel("Đang tải...")
+        self.rules_summary_label.setObjectName("OptionText")
+        rules_copy.addWidget(rules_title)
+        rules_copy.addWidget(self.rules_summary_label)
+        self.quick_rules_button = QPushButton("Quản lý")
+        self.quick_rules_button.setObjectName("LinkButton")
+        self.quick_rules_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.quick_rules_button.clicked.connect(self.open_settings)
+        rules_layout.addLayout(rules_copy, 1)
+        rules_layout.addWidget(self.quick_rules_button)
+        layout.addWidget(rules_row)
+
+        trash_row = QFrame()
+        trash_row.setObjectName("OptionRow")
+        trash_layout = QHBoxLayout(trash_row)
+        trash_layout.setContentsMargins(13, 11, 13, 11)
+        trash_copy = QVBoxLayout()
+        trash_copy.setSpacing(1)
+        trash_title = QLabel("Thùng rác nội bộ")
+        trash_title.setObjectName("OptionTitle")
+        self.trash_summary_label = QLabel("Đang kiểm tra...")
+        self.trash_summary_label.setObjectName("OptionText")
+        trash_copy.addWidget(trash_title)
+        trash_copy.addWidget(self.trash_summary_label)
+        self.trash_badge = QLabel("TRỐNG")
+        self.trash_badge.setObjectName("OptionBadge")
+        trash_layout.addLayout(trash_copy, 1)
+        trash_layout.addWidget(self.trash_badge)
+        layout.addWidget(trash_row)
+        layout.addStretch()
+        add_shadow(card, 30, 8, 25)
+        return card
+
+    def build_action_dock(self):
+        dock = QFrame()
+        dock.setObjectName("ActionDock")
+        layout = QHBoxLayout(dock)
+        layout.setContentsMargins(22, 18, 22, 18)
+        layout.setSpacing(18)
+
+        status_area = QVBoxLayout()
+        status_area.setSpacing(6)
+        self.action_title_label = QLabel("Sẵn sàng khi bạn sẵn sàng")
+        self.action_title_label.setObjectName("ActionTitle")
+        self.status_label = QLabel("Chọn một thư mục để bắt đầu")
+        self.status_label.setObjectName("ActionStatus")
+        progress_header = QHBoxLayout()
+        progress_header.addWidget(self.status_label)
+        progress_header.addStretch()
+        self.percent_label = QLabel("0%")
+        self.percent_label.setObjectName("PercentText")
+        progress_header.addWidget(self.percent_label)
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 100)
+        self.progress.setValue(0)
+        self.progress.setTextVisible(False)
+        status_area.addWidget(self.action_title_label)
+        status_area.addLayout(progress_header)
+        status_area.addWidget(self.progress)
+        layout.addLayout(status_area, 1)
+
+        buttons = QHBoxLayout()
+        buttons.setSpacing(9)
+        self.btn_undo = QPushButton("Hoàn tác")
+        self.btn_undo.setObjectName("DarkButton")
+        self.btn_undo.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_undo.clicked.connect(self.undo_action)
+        self.btn_dedupe = QPushButton("Tìm bản trùng")
+        self.btn_dedupe.setObjectName("DarkButton")
+        self.btn_dedupe.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_dedupe.clicked.connect(self.run_dedupe)
+        self.btn_run = QPushButton("Tổ chức ngay")
+        self.btn_run.setObjectName("PrimaryButton")
+        self.btn_run.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_run.clicked.connect(self.run_organizer)
+        buttons.addWidget(self.btn_undo)
+        buttons.addWidget(self.btn_dedupe)
+        buttons.addWidget(self.btn_run)
+        layout.addLayout(buttons)
+        add_shadow(dock, 38, 10, 38)
+        return dock
+
+    def install_shortcuts(self):
+        shortcut_map = {
+            "Ctrl+O": self.select_directory,
+            "Ctrl+Return": self.run_organizer,
+            "Ctrl+D": self.run_dedupe,
+            "Ctrl+Z": self.undo_action,
+            "Ctrl+,": self.open_settings,
+        }
+        for sequence, callback in shortcut_map.items():
+            shortcut = QShortcut(QKeySequence(sequence), self)
+            shortcut.activated.connect(callback)
+            self.shortcuts.append(shortcut)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, "cards_layout"):
+            self.apply_responsive_layout()
+
+    def apply_responsive_layout(self):
+        compact = self.width() < 1200
+        direction = (
+            QBoxLayout.Direction.TopToBottom
+            if compact
+            else QBoxLayout.Direction.LeftToRight
+        )
+        self.hero_layout.setDirection(direction)
+        self.cards_layout.setDirection(direction)
+        self.hero_layout.setSpacing(16 if compact else 24)
+        self.cards_layout.setSpacing(14 if compact else 18)
+        self.sidebar.setFixedWidth(238)
+
+    def on_dropzone_click(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and not self.is_busy:
+            self.select_directory()
+
+    def dragEnterEvent(self, event):
+        if self.is_busy:
+            event.ignore()
+            return
+        urls = event.mimeData().urls()
+        if any(Path(url.toLocalFile()).is_dir() for url in urls):
+            event.acceptProposedAction()
+            self.dropzone.setProperty("selected", True)
+            refresh_style(self.dropzone)
+        else:
+            event.ignore()
+
+    def dragLeaveEvent(self, event):
+        self.dropzone.setProperty("selected", bool(self.target_dir))
+        refresh_style(self.dropzone)
+        event.accept()
+
+    def dropEvent(self, event):
+        for url in event.mimeData().urls():
+            path = Path(url.toLocalFile())
+            if path.is_dir():
+                self.set_target_directory(path)
+                event.acceptProposedAction()
+                return
+        event.ignore()
+
+    def set_target_directory(self, folder):
+        path = Path(folder).resolve()
+        if not path.is_dir():
+            QMessageBox.warning(self, "Thư mục không hợp lệ", "Không thể truy cập thư mục đã chọn.")
+            return
+        if path == BASE_DIR.resolve():
+            QMessageBox.warning(
+                self,
+                "Không thể chọn thư mục ứng dụng",
+                "Để bảo vệ chương trình và dữ liệu cấu hình, hãy chọn một thư mục khác.",
+            )
+            return
+        self.target_dir = str(path)
+        self.refresh_directory_summary()
+        self.set_status_pill("Đã chọn thư mục", "ready")
+        self.action_title_label.setText("Thư mục đã sẵn sàng")
+        self.status_label.setText("Chọn “Tổ chức ngay” hoặc kiểm tra các tệp trùng lặp")
+
+    def refresh_directory_summary(self):
+        if not self.target_dir:
+            self.folder_title_label.setText("Kéo thả thư mục vào đây")
+            self.folder_path_label.setText("hoặc chọn từ máy tính của bạn")
+            self.folder_path_label.setToolTip("")
+            self.file_count_label.setText("—")
+            self.total_size_label.setText("—")
+            self.hero_folder_value.setText("Chưa chọn")
+            self.hero_folder_value.setToolTip("")
+            self.hero_files_value.setText("—")
+            self.dropzone.setProperty("selected", False)
+            refresh_style(self.dropzone)
+            self.set_ui_enabled(True)
+            self.check_trash_exists()
+            return
+
+        path = Path(self.target_dir)
+        try:
+            files = [item for item in path.iterdir() if item.is_file()]
+            total_size = sum(item.stat().st_size for item in files)
+        except OSError as exc:
+            QMessageBox.critical(self, "Không thể đọc thư mục", str(exc))
+            self.target_dir = ""
+            self.refresh_directory_summary()
+            return
+
+        display_name = path.name or str(path)
+        self.folder_title_label.setText(display_name)
+        self.folder_path_label.setText(str(path))
+        self.folder_path_label.setToolTip(str(path))
+        self.file_count_label.setText(f"{len(files):,}")
+        self.total_size_label.setText(format_bytes(total_size))
+        self.hero_folder_value.setText(display_name[:18] + ("…" if len(display_name) > 18 else ""))
+        self.hero_folder_value.setToolTip(str(path))
+        self.hero_files_value.setText(f"{len(files):,}")
+        self.dropzone.setProperty("selected", True)
+        refresh_style(self.dropzone)
+        self.set_ui_enabled(True)
+        self.check_trash_exists()
+
+    def refresh_rule_summary(self):
+        file_map = self.config_manager.get_file_map()
+        rule_count = len(file_map)
+        extension_count = sum(len(extensions) for extensions in file_map.values())
+        self.hero_rules_value.setText(str(rule_count))
+        self.rules_summary_label.setText(f"{rule_count} nhóm · {extension_count} phần mở rộng")
+
+    def set_status_pill(self, text, state="ready"):
+        self.status_pill.setText(text)
+        self.status_pill.setProperty("state", state)
+        refresh_style(self.status_pill)
+
+    def save_date_setting(self, checked):
+        self.config_manager.set_sort_by_date(bool(checked))
 
     def select_directory(self):
-        folder = QFileDialog.getExistingDirectory(self, "Chọn thư mục")
+        if self.is_busy:
+            return
+        start_path = self.target_dir or str(Path.home())
+        folder = QFileDialog.getExistingDirectory(self, "Chọn thư mục cần sắp xếp", start_path)
         if folder:
-            self.target_dir = folder
-            self.dir_label.setText(folder)
-            self.check_trash_exists()
+            self.set_target_directory(folder)
 
     def check_trash_exists(self):
-        if PAD_TRASH_DIR.exists() and any(PAD_TRASH_DIR.iterdir()):
-            self.btn_empty_trash.setEnabled(True)
-        else:
-            self.btn_empty_trash.setEnabled(False)
+        has_content = False
+        file_count = 0
+        if PAD_TRASH_DIR.exists():
+            try:
+                entries = list(PAD_TRASH_DIR.iterdir())
+                has_content = bool(entries)
+                file_count = sum(1 for entry in entries if entry.is_file())
+            except OSError:
+                has_content = False
+        self.trash_badge.setText("CÓ TỆP" if has_content else "TRỐNG")
+        self.trash_summary_label.setText(
+            f"{file_count} tệp đang chờ xử lý" if has_content else "Không có tệp đang lưu tạm"
+        )
+        self.btn_empty_trash.setEnabled(has_content and not self.is_busy)
 
     def open_trash(self):
-        if not PAD_TRASH_DIR.exists():
-            PAD_TRASH_DIR.mkdir(parents=True)
-        import subprocess
+        PAD_TRASH_DIR.mkdir(parents=True, exist_ok=True)
         try:
             os.startfile(str(PAD_TRASH_DIR))
         except AttributeError:
-            subprocess.call(['explorer', str(PAD_TRASH_DIR)])
+            import subprocess
+
+            subprocess.call(["explorer", str(PAD_TRASH_DIR)])
+        except OSError as exc:
+            QMessageBox.critical(self, "Không thể mở thùng rác", str(exc))
 
     def open_settings(self):
-        dlg = SettingsDialog(self.config_manager, self)
-        dlg.exec()
+        if self.is_busy:
+            return
+        dialog = SettingsDialog(self.config_manager, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.refresh_rule_summary()
+            self.set_status_pill("Đã lưu quy tắc", "ready")
 
     def set_ui_enabled(self, enabled):
-        self.btn_run.setEnabled(enabled)
-        self.btn_dedupe.setEnabled(enabled)
-        if enabled:
-            self.check_trash_exists()
-        else:
-            self.btn_empty_trash.setEnabled(False)
+        self.is_busy = not enabled
+        has_target = bool(self.target_dir)
+        self.btn_run.setEnabled(enabled and has_target)
+        self.btn_dedupe.setEnabled(enabled and has_target)
+        self.btn_undo.setEnabled(enabled and self.mover.has_history())
+        self.btn_select.setEnabled(enabled)
+        self.date_toggle.setEnabled(enabled)
+        self.quick_rules_button.setEnabled(enabled)
+        self.side_rules_button.setEnabled(enabled)
+        self.btn_open_trash.setEnabled(enabled)
+        self.check_trash_exists()
+
+    def begin_operation(self, title, status):
+        self.set_ui_enabled(False)
+        self.set_status_pill("Đang xử lý", "busy")
+        self.action_title_label.setText(title)
+        self.status_label.setText(status)
+        self.progress.setValue(0)
+        self.percent_label.setText("0%")
 
     def run_organizer(self):
-        if not self.target_dir:
-            QMessageBox.warning(self, "Lỗi", "Vui lòng chọn thư mục trước!")
+        if self.is_busy:
             return
-            
-        self.set_ui_enabled(False)
-        self.status_label.setText("Đang dọn dẹp...")
-        self.progress.setValue(0)
-        
+        if not self.target_dir:
+            QMessageBox.information(self, "Chọn thư mục", "Hãy chọn thư mục bạn muốn tổ chức trước.")
+            return
+        self.begin_operation("Đang tổ chức thư mục", "Chuẩn bị phân loại tệp...")
         self.mover.start_batch()
         self.worker = WorkerThread(
-            self.target_dir, 
+            self.target_dir,
             self.config_manager.get_file_map(),
             self.mover,
             self.logger,
-            self.chk_date.isChecked()
+            self.date_toggle.isChecked(),
         )
         self.worker.progress.connect(self.update_progress)
-        self.worker.finished.connect(self.organize_finished)
+        self.worker.completed.connect(self.organize_finished)
+        self.worker.failed.connect(self.operation_failed)
         self.worker.start()
 
     def update_progress(self, current, total, name):
-        percent = int((current / total) * 100) if total > 0 else 100
+        percent = int((current / total) * 100) if total else 100
         self.progress.setValue(percent)
+        self.percent_label.setText(f"{percent}%")
         self.status_label.setText(f"Đang xử lý: {name}")
 
-    def organize_finished(self, success, error):
+    def organize_finished(self, success, errors):
         self.set_ui_enabled(True)
         self.progress.setValue(100)
-        self.status_label.setText("Hoàn tất!")
-        self.btn_undo.setEnabled(True)
-        
-        msg = f"Dọn dẹp xong!\nThành công: {success}\nLỗi: {error}"
-        QMessageBox.information(self, "Kết quả", msg)
+        self.percent_label.setText("100%")
+        self.refresh_directory_summary()
+        if success == 0 and errors == 0:
+            self.action_title_label.setText("Thư mục đã gọn sẵn")
+            self.status_label.setText("Không có tệp trực tiếp nào cần phân loại")
+            self.set_status_pill("Không có thay đổi", "ready")
+            QMessageBox.information(self, "Không có tệp cần xử lý", "Thư mục này đã sẵn sàng.")
+            return
+        self.action_title_label.setText("Tổ chức hoàn tất")
+        self.status_label.setText(f"Đã di chuyển {success} tệp · {errors} lỗi")
+        self.set_status_pill("Hoàn tất", "ready" if errors == 0 else "warning")
+        QMessageBox.information(
+            self,
+            "Đã tổ chức xong",
+            f"Di chuyển thành công: {success}\nLỗi: {errors}\n\nBạn có thể hoàn tác ngay trong phiên này.",
+        )
+
+    def operation_failed(self, message):
+        self.set_ui_enabled(True)
+        self.progress.setValue(0)
+        self.percent_label.setText("0%")
+        self.action_title_label.setText("Không thể hoàn thành")
+        self.status_label.setText(message)
+        self.set_status_pill("Cần kiểm tra", "warning")
+        QMessageBox.critical(self, "Thao tác thất bại", message)
 
     def undo_action(self):
+        if self.is_busy or not self.mover.has_history():
+            return
         reply = QMessageBox.question(
-            self, "Xác nhận", 
-            "Bạn có chắc muốn hoàn tác bước dọn dẹp vừa rồi?\n(Các file sẽ trở về vị trí cũ)", 
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            self,
+            "Hoàn tác lần gần nhất",
+            "Đưa các tệp của lần xử lý gần nhất trở về vị trí cũ?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
         )
-        if reply == QMessageBox.StandardButton.Yes:
-            self.logger.log("--- BẮT ĐẦU HOÀN TÁC (UNDO) ---")
-            success, error = self.mover.undo_last_operation(self.logger)
-            self.logger.log("--- KẾT THÚC HOÀN TÁC ---")
-            QMessageBox.information(self, "Hoàn tác", f"Đã khôi phục {success} file. Lỗi: {error}\n(Chi tiết xem trong logs/activity.log)")
-            self.btn_undo.setEnabled(self.mover.has_history())
-            self.check_trash_exists()
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        self.logger.log("--- BẮT ĐẦU HOÀN TÁC ---")
+        success, errors = self.mover.undo_last_operation(self.logger)
+        self.logger.log("--- KẾT THÚC HOÀN TÁC ---")
+        self.refresh_directory_summary()
+        self.set_ui_enabled(True)
+        self.action_title_label.setText("Đã hoàn tác")
+        self.status_label.setText(f"Khôi phục {success} tệp · {errors} lỗi")
+        self.set_status_pill("Đã khôi phục", "ready" if errors == 0 else "warning")
+        QMessageBox.information(self, "Hoàn tác hoàn tất", f"Khôi phục: {success}\nLỗi: {errors}")
 
     def empty_trash(self):
-        if not PAD_TRASH_DIR.exists():
+        if self.is_busy or not PAD_TRASH_DIR.exists():
             return
-            
-        reply = QMessageBox.question(
-            self, "Dọn Sạch Thùng Rác", 
-            "Bạn có chắc muốn XÓA VĨNH VIỄN tất cả các file trong thùng rác PADOrganizer_Trash không?\n(Hành động này KHÔNG THỂ hoàn tác)",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        try:
+            has_content = any(PAD_TRASH_DIR.iterdir())
+        except OSError:
+            has_content = False
+        if not has_content:
+            self.check_trash_exists()
+            return
+        reply = QMessageBox.warning(
+            self,
+            "Dọn sạch thùng rác",
+            "Xóa vĩnh viễn toàn bộ nội dung trong PADOrganizer_Trash? Thao tác này không thể hoàn tác.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
-        
-        if reply == QMessageBox.StandardButton.Yes:
-            import shutil
-            try:
-                shutil.rmtree(str(PAD_TRASH_DIR))
-                QMessageBox.information(self, "Thành công", "Đã dọn sạch thùng rác!")
-                self.check_trash_exists()
-                self.logger.log("EMPTY TRASH: Đã xóa vĩnh viễn thùng rác.")
-            except Exception as e:
-                QMessageBox.critical(self, "Lỗi", f"Không thể xóa thùng rác: {e}")
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            shutil.rmtree(PAD_TRASH_DIR)
+            self.logger.log("EMPTY TRASH: Đã xóa vĩnh viễn thùng rác.")
+            self.check_trash_exists()
+            self.set_status_pill("Đã dọn thùng rác", "ready")
+            QMessageBox.information(self, "Thùng rác đã trống", "Toàn bộ nội dung đã được xóa.")
+        except Exception as exc:
+            QMessageBox.critical(self, "Không thể dọn thùng rác", str(exc))
 
     def run_dedupe(self):
-        if not self.target_dir:
-            QMessageBox.warning(self, "Lỗi", "Vui lòng chọn thư mục trước!")
+        if self.is_busy:
             return
-            
-        self.set_ui_enabled(False)
-        self.status_label.setText("Đang quét file trùng lặp (có thể mất vài phút)...")
-        self.progress.setValue(0)
-        
+        if not self.target_dir:
+            QMessageBox.information(self, "Chọn thư mục", "Hãy chọn thư mục cần kiểm tra trước.")
+            return
+        self.begin_operation("Đang tìm các bản trùng", "Đọc và đối chiếu nội dung tệp...")
         self.dedupe_worker = DedupeThread(self.target_dir)
         self.dedupe_worker.progress.connect(self.update_progress)
-        self.dedupe_worker.finished.connect(self.dedupe_finished)
+        self.dedupe_worker.completed.connect(self.dedupe_finished)
+        self.dedupe_worker.failed.connect(self.operation_failed)
         self.dedupe_worker.start()
 
     def dedupe_finished(self, duplicates):
         self.set_ui_enabled(True)
         self.progress.setValue(100)
-        
+        self.percent_label.setText("100%")
         if not duplicates:
-            self.status_label.setText("Tuyệt vời! Không tìm thấy file trùng lặp.")
-            QMessageBox.information(self, "Kết quả", "Thư mục sạch sẽ, không có file trùng lặp!")
+            self.action_title_label.setText("Không phát hiện bản trùng")
+            self.status_label.setText("Các tệp trực tiếp trong thư mục đều khác nhau")
+            self.set_status_pill("Sạch sẽ", "ready")
+            QMessageBox.information(self, "Không có tệp trùng", "Thư mục này đang rất gọn gàng.")
             return
-            
-        self.status_label.setText(f"Phát hiện {len(duplicates)} nhóm trùng lặp.")
-        
-        # Hiển thị giao diện chọn và xóa file
-        dlg = DedupeDialog(duplicates, self.logger, self.mover, self.target_dir, self)
-        dlg.exec()
+        self.action_title_label.setText("Đã tìm thấy bản trùng")
+        self.status_label.setText(f"{len(duplicates)} nhóm cần bạn quyết định")
+        self.set_status_pill("Cần xem lại", "warning")
+        dialog = DedupeDialog(duplicates, self.logger, self.mover, self.target_dir, self)
+        dialog.exec()
+        self.refresh_directory_summary()
+        self.set_ui_enabled(True)
+
+    def closeEvent(self, event):
+        if self.is_busy:
+            QMessageBox.information(
+                self,
+                "Đang xử lý dữ liệu",
+                "PADOrganizer đang làm việc. Vui lòng chờ thao tác hiện tại hoàn tất trước khi đóng.",
+            )
+            event.ignore()
+            return
+        event.accept()
+
 
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setApplicationDisplayName(APP_FULL_NAME)
     app.setOrganizationName("padduwcs")
-    
-    if not os.path.exists(get_resource_path('logo.ico')):
-        pass
-        
+    app.setStyle("Fusion")
+    app.setFont(QFont("Segoe UI Variable Text", 10))
+    app.setStyleSheet(APP_STYLE)
+
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
+
 
 if __name__ == "__main__":
     main()
