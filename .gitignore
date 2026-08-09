@@ -8,6 +8,7 @@ logs/
 
 # Môi trường ảo (nếu có)
 venv/
+.venv/
 .env
 
 # OS Files
@@ -21,10 +22,9 @@ Thumbs.db
 # Build folders
 build/
 dist/
-*.spec
 
 # Cấu hình người dùng
 config.json
 
 # Thùng rác nội bộ
-Smart_Trash/
+PADOrganizer_Trash/

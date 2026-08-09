@@ -10,8 +10,12 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QIcon, QFont
 
-from modules import FileMover, SmartLogger, ConfigManager, Deduplicator
-from modules.config_manager import GLOBAL_TRASH_DIR
+from modules import FileMover, PADLogger, ConfigManager, Deduplicator
+from modules.config_manager import PAD_TRASH_DIR
+
+
+APP_NAME = "PADOrganizer"
+APP_FULL_NAME = "PADOrganizer: Personal Archive Directory Organizer"
 
 def get_resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
@@ -254,24 +258,24 @@ class DedupeDialog(QDialog):
                 QMessageBox.information(self, "Thành công", f"Đã xóa vĩnh viễn {deleted_count} file rác.")
                 self.accept()
         else:
-            reply = QMessageBox.question(self, "Chuyển vào Thùng rác", f"Bạn có chắc muốn chuyển {len(self.to_delete)} file vào Smart_Trash không?\n(Bạn có thể mở Smart_Trash để lấy lại sau)", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            reply = QMessageBox.question(self, "Chuyển vào Thùng rác", f"Bạn có chắc muốn chuyển {len(self.to_delete)} file vào PADOrganizer_Trash không?\n(Bạn có thể mở PADOrganizer_Trash để lấy lại sau)", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             if reply == QMessageBox.StandardButton.Yes:
-                if not GLOBAL_TRASH_DIR.exists():
-                    GLOBAL_TRASH_DIR.mkdir(parents=True)
+                if not PAD_TRASH_DIR.exists():
+                    PAD_TRASH_DIR.mkdir(parents=True)
                 
                 self.mover.start_batch()
                 deleted_count = 0
                 for f in self.to_delete:
                     try:
                         f_name = f.name
-                        new_path = self.mover.move_file(f, GLOBAL_TRASH_DIR, sort_by_date=False)
+                        new_path = self.mover.move_file(f, PAD_TRASH_DIR, sort_by_date=False)
                         self.logger.log(f"TRASHED: {f_name} -> {new_path.name}")
                         deleted_count += 1
                     except Exception as e:
                         self.logger.log(f"TRASH ERROR: Không thể chuyển {f.name} - {e}")
                 self.mover.end_batch()
                         
-                QMessageBox.information(self, "Thành công", f"Đã chuyển {deleted_count} file trùng lặp vào Smart_Trash.")
+                QMessageBox.information(self, "Thành công", f"Đã chuyển {deleted_count} file trùng lặp vào PADOrganizer_Trash.")
                 if self.parent() and hasattr(self.parent(), 'btn_undo'):
                     self.parent().btn_undo.setEnabled(True)
                     if hasattr(self.parent(), 'check_trash_exists'):
@@ -282,13 +286,13 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.config_manager = ConfigManager()
-        self.logger = SmartLogger()
+        self.logger = PADLogger()
         self.mover = FileMover()
         self.target_dir = ""
         self.init_ui()
 
     def init_ui(self):
-        self.setWindowTitle("Smart File Organizer")
+        self.setWindowTitle(APP_FULL_NAME)
         self.resize(600, 400)
         
         icon_path = get_resource_path('logo.ico')
@@ -322,11 +326,16 @@ class MainWindow(QMainWindow):
         main_layout.setContentsMargins(25, 25, 25, 25)
         main_layout.setSpacing(15)
 
-        title = QLabel("Smart File Organizer")
+        title = QLabel(APP_NAME)
         title.setFont(QFont("Segoe UI", 22, QFont.Weight.Bold))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet("color: #0056b3; margin-bottom: 10px;")
+        title.setStyleSheet("color: #0056b3;")
         main_layout.addWidget(title)
+
+        subtitle = QLabel("Personal Archive Directory Organizer")
+        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        subtitle.setStyleSheet("color: #5f6b7a; margin-bottom: 10px;")
+        main_layout.addWidget(subtitle)
 
         dir_layout = QHBoxLayout()
         self.dir_label = QLabel("Chưa chọn thư mục")
@@ -428,19 +437,19 @@ class MainWindow(QMainWindow):
             self.check_trash_exists()
 
     def check_trash_exists(self):
-        if GLOBAL_TRASH_DIR.exists() and any(GLOBAL_TRASH_DIR.iterdir()):
+        if PAD_TRASH_DIR.exists() and any(PAD_TRASH_DIR.iterdir()):
             self.btn_empty_trash.setEnabled(True)
         else:
             self.btn_empty_trash.setEnabled(False)
 
     def open_trash(self):
-        if not GLOBAL_TRASH_DIR.exists():
-            GLOBAL_TRASH_DIR.mkdir(parents=True)
+        if not PAD_TRASH_DIR.exists():
+            PAD_TRASH_DIR.mkdir(parents=True)
         import subprocess
         try:
-            os.startfile(str(GLOBAL_TRASH_DIR))
+            os.startfile(str(PAD_TRASH_DIR))
         except AttributeError:
-            subprocess.call(['explorer', str(GLOBAL_TRASH_DIR)])
+            subprocess.call(['explorer', str(PAD_TRASH_DIR)])
 
     def open_settings(self):
         dlg = SettingsDialog(self.config_manager, self)
@@ -504,19 +513,19 @@ class MainWindow(QMainWindow):
             self.check_trash_exists()
 
     def empty_trash(self):
-        if not GLOBAL_TRASH_DIR.exists():
+        if not PAD_TRASH_DIR.exists():
             return
             
         reply = QMessageBox.question(
             self, "Dọn Sạch Thùng Rác", 
-            "Bạn có chắc muốn XÓA VĨNH VIỄN tất cả các file trong thùng rác Smart_Trash không?\n(Hành động này KHÔNG THỂ hoàn tác)", 
+            "Bạn có chắc muốn XÓA VĨNH VIỄN tất cả các file trong thùng rác PADOrganizer_Trash không?\n(Hành động này KHÔNG THỂ hoàn tác)",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         
         if reply == QMessageBox.StandardButton.Yes:
             import shutil
             try:
-                shutil.rmtree(str(GLOBAL_TRASH_DIR))
+                shutil.rmtree(str(PAD_TRASH_DIR))
                 QMessageBox.information(self, "Thành công", "Đã dọn sạch thùng rác!")
                 self.check_trash_exists()
                 self.logger.log("EMPTY TRASH: Đã xóa vĩnh viễn thùng rác.")
@@ -554,6 +563,9 @@ class MainWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
+    app.setApplicationName(APP_NAME)
+    app.setApplicationDisplayName(APP_FULL_NAME)
+    app.setOrganizationName("padduwcs")
     
     if not os.path.exists(get_resource_path('logo.ico')):
         pass

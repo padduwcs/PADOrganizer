@@ -10,7 +10,7 @@ def get_base_dir():
         return Path(__file__).resolve().parent.parent
 
 BASE_DIR = get_base_dir()
-GLOBAL_TRASH_DIR = BASE_DIR / "Smart_Trash"
+PAD_TRASH_DIR = BASE_DIR / "PADOrganizer_Trash"
 
 DEFAULT_CONFIG = {
     "file_map": {

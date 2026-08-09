@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
-class SmartLogger:
+class PADLogger:
     def __init__(self, log_filename="activity.log"):
         # 1. Xác định thư mục gốc của dự án (Root Directory)
         # Nếu là file .py: Path(__file__) là đường dẫn file logger.py

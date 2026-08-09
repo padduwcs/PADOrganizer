@@ -1,55 +1,88 @@
-# Smart File Organizer 🚀
+# PADOrganizer
 
-Ứng dụng dọn dẹp và sắp xếp file tự động bằng Python, với giao diện hiện đại sử dụng **PyQt6**.
+**Personal Archive Directory Organizer** — ứng dụng desktop giúp phân loại, sắp xếp và dọn dẹp tệp cá nhân bằng Python và PyQt6.
 
-![Smart Organizer Logo](logo.ico)
+![PADOrganizer logo](logo.ico)
 
-## 🌟 Tính năng nổi bật
+## Tính năng
 
-- **Tự động phân loại**: Gom các file lộn xộn vào đúng thư mục (Images, Documents, Videos...) theo quy tắc tùy chỉnh.
-- **Phân loại theo thời gian**: Tự động tạo thư mục theo `Năm-Tháng` (ví dụ: `Images/2026-05`).
-- **Giao diện hiện đại (GUI)**: Trải nghiệm sử dụng mượt mà với PyQt6, hiển thị tiến trình rõ ràng.
-- **Hoàn tác (Undo) Thông minh** ↩️: Khôi phục lại trạng thái file theo từng đợt thao tác (hỗ trợ dọn dẹp rỗng).
-- **Tìm và Xóa file trùng lặp an toàn** 🗑️: 
-  - Chỉ quét trong thư mục hiện tại để không làm hỏng cấu trúc thư mục con.
-  - Tự động nhận diện và ưu tiên giữ lại file gốc.
-  - Hỗ trợ thùng rác trung tâm (`Smart_Trash`), cho phép khôi phục lại bất kỳ lúc nào ngay cả khi đã tắt phần mềm.
-  - Hỗ trợ tùy chọn giữ lại bộ file không muốn can thiệp.
-- **Tùy biến quy tắc**: Cho phép người dùng thêm/bớt các định dạng file thông qua giao diện `Cài đặt` (Settings).
+- Tự động phân loại tệp vào các thư mục như `Images`, `Documents`, `Videos` theo quy tắc có thể tùy chỉnh.
+- Tùy chọn sắp xếp tiếp theo mốc `Năm-Tháng`, ví dụ `Images/2026-05`.
+- Giao diện desktop trực quan với tiến trình xử lý rõ ràng.
+- Hoàn tác đợt di chuyển gần nhất và tự động dọn thư mục rỗng.
+- Tìm tệp trùng lặp theo nội dung, cho phép chọn bản cần giữ.
+- Chuyển tệp vào thùng rác nội bộ `PADOrganizer_Trash` để có thể lấy lại, hoặc xóa vĩnh viễn khi người dùng xác nhận.
+- Chỉnh sửa quy tắc phân loại ngay trong giao diện.
 
-## 🛠️ Cài đặt & Sử dụng
-1. Clone mã nguồn về máy:
-   ```bash
-   git clone https://github.com/Ten-Cua-Ban/smart-file-organizer.git
-   cd smart-file-organizer
-   ```
+## Cài đặt và chạy
 
-2. Cài đặt các thư viện (Khuyến nghị dùng môi trường ảo hoặc Conda):
-   ```bash
-   pip install -r requirements.txt
-   ```
+Yêu cầu Python 3.9 trở lên.
 
-3. Chạy file trực tiếp:
-   ```bash
-   python main.py
-   ```
-
-## 📦 Đóng gói thành ứng dụng (.exe)
-
-Dự án đã có sẵn file cấu hình `SmartOrganizer.spec`. Để đóng gói thành file `.exe` chạy độc lập (không cần cài python/conda), bạn chỉ cần chạy:
 ```bash
+git clone https://github.com/padduwcs/PADOrganizer.git
+cd PADOrganizer
+python -m venv .venv
+```
+
+Kích hoạt môi trường ảo:
+
+```powershell
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
+```
+
+```bash
+# macOS/Linux
+source .venv/bin/activate
+```
+
+Cài thư viện và chạy ứng dụng:
+
+```bash
+python -m pip install -r requirements.txt
+python main.py
+```
+
+## Đóng gói cho Windows
+
+Chạy:
+
+```bat
 build.bat
 ```
-Hoặc chạy lệnh thủ công: `pyinstaller SmartOrganizer.spec`.
-File ứng dụng sẽ xuất hiện trong thư mục `dist/`.
 
-## 📜 Cấu trúc thư mục
-- `main.py`: Chứa giao diện PyQt6 và luồng chạy chính.
-- `modules/`: Chứa các module xử lý logic.
-  - `classifier.py`: Di chuyển file và lưu lịch sử (Undo).
-  - `deduplicator.py`: Thuật toán băm và quét file trùng lặp.
-  - `config_manager.py`: Lưu và đọc cài đặt từ `config.json`.
-  - `logger.py`: Ghi lại nhật ký vào thư mục `logs/`.
-- `requirements.txt`: Danh sách các thư viện Python.
-- `build.bat`: Script đóng gói ứng dụng nhanh cho Windows.
-- `config.json` (tự động tạo): Lưu quy tắc phân loại của bạn.
+Hoặc đóng gói thủ công:
+
+```bash
+pyinstaller PADOrganizer.spec
+```
+
+Tệp thực thi được tạo tại `dist/PADOrganizer.exe`.
+
+## Cấu trúc dự án
+
+```text
+PADOrganizer/
+├── main.py                 # Giao diện và luồng ứng dụng
+├── modules/
+│   ├── classifier.py       # Di chuyển tệp và hoàn tác
+│   ├── config_manager.py   # Quy tắc phân loại và đường dẫn dữ liệu
+│   ├── deduplicator.py     # Phát hiện tệp trùng lặp
+│   └── logger.py           # Nhật ký hoạt động
+├── PADOrganizer.spec       # Cấu hình PyInstaller
+├── build.bat               # Script đóng gói cho Windows
+├── requirements.txt
+└── logo.ico
+```
+
+`config.json`, `logs/` và `PADOrganizer_Trash/` được tạo khi chạy ứng dụng và không được đưa vào Git.
+
+## Lưu ý an toàn
+
+- Hãy kiểm tra kỹ danh sách tệp trước khi chọn xóa vĩnh viễn.
+- PADOrganizer chỉ quét các tệp nằm trực tiếp trong thư mục đã chọn khi tìm bản trùng lặp.
+- Chức năng hoàn tác chỉ áp dụng cho các thao tác trong phiên đang chạy.
+
+## Giấy phép
+
+Repository hiện chưa khai báo giấy phép sử dụng. Mọi quyền được bảo lưu cho chủ sở hữu repository.
