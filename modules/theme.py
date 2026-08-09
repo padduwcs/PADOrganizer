@@ -152,6 +152,12 @@ APP_STYLE = """
         color: #a2a7b8;
         font-size: 11px;
     }
+    QLabel#VersionLabel {
+        color: #696f84;
+        font-size: 10px;
+        font-weight: 650;
+        padding: 3px 0;
+    }
 
     /* Top bar and hero */
     QLabel#PageEyebrow {
@@ -458,6 +464,43 @@ APP_STYLE = """
     QLabel#DialogSubtitle {
         color: #7a7f8e;
         font-size: 11px;
+    }
+    QFrame#UpdateSummary {
+        background-color: #eeebff;
+        border: 1px solid #dcd5ff;
+        border-radius: 12px;
+    }
+    QLabel#UpdateVersionMuted {
+        color: #74798a;
+        font-size: 11px;
+        font-weight: 700;
+    }
+    QLabel#UpdateArrow {
+        color: #8b78ed;
+        font-size: 16px;
+        font-weight: 800;
+    }
+    QLabel#UpdateVersionNew {
+        color: #533ccc;
+        font-size: 12px;
+        font-weight: 800;
+    }
+    QLabel#UpdateHint {
+        color: #6f7484;
+        background-color: #f0f2f7;
+        border: 1px solid #e1e4eb;
+        border-radius: 9px;
+        padding: 10px 12px;
+        font-size: 10px;
+    }
+    QTextBrowser#ReleaseNotes {
+        color: #343744;
+        background-color: #ffffff;
+        border: 1px solid #e0e3eb;
+        border-radius: 10px;
+        padding: 10px;
+        font-size: 11px;
+        selection-background-color: #dcd5ff;
     }
     QLineEdit {
         min-height: 22px;

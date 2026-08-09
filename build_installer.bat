@@ -2,7 +2,13 @@
 setlocal
 
 set "APP_VERSION=%~1"
-if not defined APP_VERSION set "APP_VERSION=1.0.0"
+if not defined APP_VERSION (
+    echo Hay truyen so phien ban, vi du: build_installer.bat 1.1.0
+    exit /b 1
+)
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\Check-Version.ps1" -ExpectedVersion "%APP_VERSION%"
+if errorlevel 1 exit /b 1
 
 if not exist "dist\PADOrganizer.exe" (
     echo Khong tim thay dist\PADOrganizer.exe.

@@ -33,6 +33,8 @@ Script ưu tiên Python trong `.venv` hoặc `venv`, sau đó mới tìm Python 
 
 ## Tạo Installer và bộ phát hành
 
+Trước khi build một phiên bản mới, cập nhật `APP_VERSION` trong `version.py`. Số phiên bản truyền cho script và tag GitHub phải khớp hoàn toàn với giá trị này; quá trình build sẽ dừng nếu phát hiện sai lệch.
+
 Cài [Inno Setup 6](https://jrsoftware.org/isdl.php), sau đó chạy:
 
 ```bat
@@ -66,6 +68,14 @@ git push origin v1.0.1
 ```
 
 Mỗi bản phát hành phải sử dụng một số phiên bản và tag mới. Có thể chạy workflow thủ công từ tab **Actions** để kiểm tra artefact mà không tạo Release.
+
+Quy trình phiên bản khuyến nghị:
+
+```text
+version.py: APP_VERSION = "1.0.1"
+build_release.bat 1.0.1
+Git tag: v1.0.1
+```
 
 ## Cấu trúc chính
 

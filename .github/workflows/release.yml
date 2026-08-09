@@ -9,7 +9,6 @@ on:
       version:
         description: "Release version, for example 1.0.0"
         required: true
-        default: "1.0.0"
 
 permissions:
   contents: write
@@ -41,7 +40,7 @@ jobs:
           } else {
             $version = "${{ github.ref_name }}" -replace '^v', ''
           }
-          if ($version -notmatch '^\d+\.\d+\.\d+([.-][0-9A-Za-z.-]+)?$') {
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
             throw "Invalid version: $version"
           }
           "version=$version" >> $env:GITHUB_OUTPUT

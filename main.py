@@ -4,8 +4,25 @@ import sys
 from copy import deepcopy
 from pathlib import Path
 
-from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, Qt, QThread, pyqtProperty, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QIcon, QKeySequence, QPainter, QShortcut
+from PyQt6.QtCore import (
+    QEasingCurve,
+    QPropertyAnimation,
+    QRectF,
+    Qt,
+    QThread,
+    QUrl,
+    pyqtProperty,
+    pyqtSignal,
+)
+from PyQt6.QtGui import (
+    QColor,
+    QDesktopServices,
+    QFont,
+    QIcon,
+    QKeySequence,
+    QPainter,
+    QShortcut,
+)
 from PyQt6.QtWidgets import (
     QAbstractButton,
     QAbstractItemView,
@@ -30,6 +47,7 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
+    QTextBrowser,
     QVBoxLayout,
     QWidget,
 )
@@ -37,6 +55,15 @@ from PyQt6.QtWidgets import (
 from modules import ConfigManager, Deduplicator, FileMover, PADLogger
 from modules.config_manager import BASE_DIR, DEFAULT_CONFIG, PAD_TRASH_DIR
 from modules.theme import APP_STYLE, add_shadow
+from modules.updater import (
+    UpdateError,
+    download_installer,
+    fetch_latest_release,
+    is_installed_build,
+    is_newer_version,
+    launch_installer,
+)
+from version import APP_VERSION
 
 
 APP_NAME = "PADOrganizer"
@@ -177,6 +204,123 @@ class DedupeThread(QThread):
             self.completed.emit(duplicates)
         except Exception as exc:
             self.failed.emit(f"Không thể quét tệp trùng lặp: {exc}")
+
+
+class UpdateCheckThread(QThread):
+    completed = pyqtSignal(object)
+    failed = pyqtSignal(str)
+
+    def run(self):
+        try:
+            self.completed.emit(fetch_latest_release())
+        except UpdateError as exc:
+            self.failed.emit(str(exc))
+        except Exception:
+            self.failed.emit("Không thể kiểm tra cập nhật vào lúc này.")
+
+
+class UpdateDownloadThread(QThread):
+    progress = pyqtSignal(int, int)
+    completed = pyqtSignal(str)
+    failed = pyqtSignal(str)
+
+    def __init__(self, release):
+        super().__init__()
+        self.release = release
+
+    def run(self):
+        try:
+            path = download_installer(
+                self.release,
+                lambda current, total: self.progress.emit(current, total),
+            )
+            self.completed.emit(str(path))
+        except UpdateError as exc:
+            self.failed.emit(str(exc))
+        except Exception:
+            self.failed.emit("Không thể tải bản cập nhật vào lúc này.")
+
+
+class UpdateDialog(QDialog):
+    def __init__(self, release, installed_build, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Cập nhật PADOrganizer")
+        self.setModal(True)
+        self.setMinimumWidth(560)
+        self.resize(560, 480)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(28, 26, 28, 24)
+        layout.setSpacing(14)
+
+        eyebrow = QLabel("CẬP NHẬT MỚI")
+        eyebrow.setObjectName("DialogEyebrow")
+        title = QLabel(f"PADOrganizer v{release.version} đã sẵn sàng")
+        title.setObjectName("DialogTitle")
+        subtitle = QLabel(
+            f"Bạn đang dùng v{APP_VERSION}. Hãy xem nội dung thay đổi trước khi quyết định."
+        )
+        subtitle.setObjectName("DialogSubtitle")
+        subtitle.setWordWrap(True)
+        layout.addWidget(eyebrow)
+        layout.addWidget(title)
+        layout.addWidget(subtitle)
+
+        version_card = QFrame()
+        version_card.setObjectName("UpdateSummary")
+        version_layout = QHBoxLayout(version_card)
+        version_layout.setContentsMargins(16, 13, 16, 13)
+        current_label = QLabel(f"Hiện tại  ·  v{APP_VERSION}")
+        current_label.setObjectName("UpdateVersionMuted")
+        arrow = QLabel("→")
+        arrow.setObjectName("UpdateArrow")
+        latest_label = QLabel(f"Mới nhất  ·  v{release.version}")
+        latest_label.setObjectName("UpdateVersionNew")
+        version_layout.addWidget(current_label)
+        version_layout.addStretch()
+        version_layout.addWidget(arrow)
+        version_layout.addStretch()
+        version_layout.addWidget(latest_label)
+        layout.addWidget(version_card)
+
+        notes_title = QLabel("Có gì mới")
+        notes_title.setObjectName("OptionTitle")
+        layout.addWidget(notes_title)
+        notes = QTextBrowser()
+        notes.setObjectName("ReleaseNotes")
+        notes.setPlainText(release.notes[:6000])
+        notes.setOpenExternalLinks(True)
+        notes.setMinimumHeight(150)
+        layout.addWidget(notes, 1)
+
+        if installed_build:
+            hint_text = (
+                "Installer sẽ được tải và xác minh SHA-256. "
+                "Ứng dụng chỉ đóng sau khi bạn xác nhận cài đặt."
+            )
+            action_text = "Tải và cập nhật"
+        else:
+            hint_text = (
+                "Bạn đang dùng bản portable hoặc chạy từ mã nguồn. "
+                "Trang Release sẽ được mở để bạn chọn bản phù hợp."
+            )
+            action_text = "Mở trang tải xuống"
+        hint = QLabel(hint_text)
+        hint.setObjectName("UpdateHint")
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+
+        actions = QHBoxLayout()
+        actions.addStretch()
+        cancel_button = QPushButton("Để sau")
+        cancel_button.setObjectName("DialogButton")
+        cancel_button.clicked.connect(self.reject)
+        action_button = QPushButton(action_text)
+        action_button.setObjectName("PrimaryButton")
+        action_button.clicked.connect(self.accept)
+        actions.addWidget(cancel_button)
+        actions.addWidget(action_button)
+        layout.addLayout(actions)
 
 
 class CategoryEditorDialog(QDialog):
@@ -718,6 +862,9 @@ class MainWindow(QMainWindow):
         self.target_dir = ""
         self.is_busy = False
         self.shortcuts = []
+        self.update_check_worker = None
+        self.update_download_worker = None
+        self.pending_update_release = None
         self.init_ui()
         self.install_shortcuts()
         self.refresh_rule_summary()
@@ -817,6 +964,13 @@ class MainWindow(QMainWindow):
         maintenance_section.setObjectName("SidebarSection")
         side_layout.addWidget(maintenance_section)
 
+        self.btn_check_updates = QPushButton("Kiểm tra cập nhật")
+        self.btn_check_updates.setObjectName("SidebarButton")
+        self.btn_check_updates.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_check_updates.setToolTip("Chỉ kết nối GitHub khi bạn chủ động kiểm tra")
+        self.btn_check_updates.clicked.connect(self.check_for_updates)
+        side_layout.addWidget(self.btn_check_updates)
+
         self.btn_empty_trash = QPushButton("Dọn sạch thùng rác")
         self.btn_empty_trash.setObjectName("SidebarDanger")
         self.btn_empty_trash.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -831,6 +985,11 @@ class MainWindow(QMainWindow):
         side_layout.addWidget(self.btn_clear_logs)
 
         side_layout.addStretch()
+        version_label = QLabel(f"PADOrganizer  ·  v{APP_VERSION}")
+        version_label.setObjectName("VersionLabel")
+        version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        side_layout.addWidget(version_label)
+        side_layout.addSpacing(4)
         privacy = QFrame()
         privacy.setObjectName("PrivacyCard")
         privacy_layout = QVBoxLayout(privacy)
@@ -845,7 +1004,9 @@ class MainWindow(QMainWindow):
         privacy_header.addWidget(privacy_dot)
         privacy_header.addWidget(privacy_title)
         privacy_header.addStretch()
-        privacy_hint = QLabel("Mọi thao tác diễn ra trên thiết bị.\nKhông có dữ liệu được tải lên mạng.")
+        privacy_hint = QLabel(
+            "Tệp cá nhân luôn ở trên thiết bị.\nChỉ kết nối GitHub khi bạn kiểm tra cập nhật."
+        )
         privacy_hint.setObjectName("PrivacyText")
         privacy_hint.setWordWrap(True)
         privacy_layout.addLayout(privacy_header)
@@ -1363,6 +1524,7 @@ class MainWindow(QMainWindow):
         self.quick_rules_button.setEnabled(enabled)
         self.side_rules_button.setEnabled(enabled)
         self.btn_open_trash.setEnabled(enabled)
+        self.btn_check_updates.setEnabled(enabled)
         self.check_trash_exists()
         self.check_logs_exist()
 
@@ -1505,6 +1667,123 @@ class MainWindow(QMainWindow):
         except OSError as exc:
             QMessageBox.critical(self, "Không thể xóa nhật ký", str(exc))
 
+    def check_for_updates(self):
+        if self.is_busy:
+            return
+        self.begin_operation("Đang kiểm tra cập nhật", "Kết nối GitHub theo yêu cầu của bạn...")
+        self.progress.setValue(15)
+        self.percent_label.setText("…")
+        self.update_check_worker = UpdateCheckThread()
+        self.update_check_worker.completed.connect(self.update_check_finished)
+        self.update_check_worker.failed.connect(self.update_operation_failed)
+        self.update_check_worker.finished.connect(self.update_check_worker.deleteLater)
+        self.update_check_worker.start()
+
+    def update_check_finished(self, release):
+        self.set_ui_enabled(True)
+        self.progress.setValue(100)
+        self.percent_label.setText("100%")
+        if not is_newer_version(release.version, APP_VERSION):
+            self.action_title_label.setText("Không có bản phát hành mới hơn")
+            self.status_label.setText(f"Phiên bản đang sử dụng · v{APP_VERSION}")
+            self.set_status_pill("Mới nhất", "ready")
+            self.logger.log(f"UPDATE CHECK: Không có bản mới hơn v{APP_VERSION}.")
+            QMessageBox.information(
+                self,
+                "Không có bản cập nhật mới",
+                f"Không tìm thấy bản phát hành nào mới hơn PADOrganizer v{APP_VERSION}.",
+            )
+            return
+
+        self.pending_update_release = release
+        self.action_title_label.setText(f"Đã có PADOrganizer v{release.version}")
+        self.status_label.setText("Xem nội dung thay đổi và cập nhật khi bạn sẵn sàng")
+        self.set_status_pill("Có bản mới", "warning")
+        self.logger.log(f"UPDATE AVAILABLE: v{APP_VERSION} -> v{release.version}")
+
+        installed_build = is_installed_build()
+        dialog = UpdateDialog(release, installed_build, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        if not installed_build:
+            if not QDesktopServices.openUrl(QUrl(release.page_url)):
+                QMessageBox.warning(
+                    self,
+                    "Không thể mở trình duyệt",
+                    f"Hãy mở trang sau để tải bản mới:\n{release.page_url}",
+                )
+            return
+        self.download_update(release)
+
+    def download_update(self, release):
+        self.begin_operation(
+            f"Đang tải PADOrganizer v{release.version}",
+            "Chuẩn bị tải Installer từ GitHub...",
+        )
+        self.pending_update_release = release
+        self.update_download_worker = UpdateDownloadThread(release)
+        self.update_download_worker.progress.connect(self.update_download_progress)
+        self.update_download_worker.completed.connect(self.update_download_finished)
+        self.update_download_worker.failed.connect(self.update_operation_failed)
+        self.update_download_worker.finished.connect(self.update_download_worker.deleteLater)
+        self.update_download_worker.start()
+
+    def update_download_progress(self, current, total):
+        percent = int((current / total) * 100) if total else 0
+        self.progress.setValue(percent)
+        self.percent_label.setText(f"{percent}%" if total else "…")
+        if total:
+            self.status_label.setText(f"Đã tải {format_bytes(current)} / {format_bytes(total)}")
+        else:
+            self.status_label.setText(f"Đã tải {format_bytes(current)}")
+
+    def update_download_finished(self, installer_path):
+        self.set_ui_enabled(True)
+        self.progress.setValue(100)
+        self.percent_label.setText("100%")
+        self.action_title_label.setText("Bản cập nhật đã sẵn sàng")
+        self.status_label.setText("Installer đã tải xong và khớp mã SHA-256")
+        self.set_status_pill("Đã xác minh", "ready")
+
+        release = self.pending_update_release
+        version_text = release.version if release else "mới"
+        reply = QMessageBox.question(
+            self,
+            "Cài đặt bản cập nhật",
+            f"PADOrganizer v{version_text} đã được tải và xác minh thành công.\n\n"
+            "Cài đặt ngay bây giờ? PADOrganizer sẽ đóng và mở trình cài đặt.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            try:
+                Path(installer_path).unlink()
+            except OSError:
+                pass
+            self.status_label.setText("Bạn có thể kiểm tra và tải lại bất cứ lúc nào")
+            self.set_status_pill("Để sau", "ready")
+            return
+
+        try:
+            launch_installer(installer_path)
+        except UpdateError as exc:
+            self.update_operation_failed(str(exc))
+            return
+
+        self.logger.log(f"UPDATE INSTALL: Đã mở Installer v{version_text}.")
+        self.is_busy = False
+        QApplication.instance().quit()
+
+    def update_operation_failed(self, message):
+        self.set_ui_enabled(True)
+        self.progress.setValue(0)
+        self.percent_label.setText("0%")
+        self.action_title_label.setText("Không thể cập nhật")
+        self.status_label.setText(message)
+        self.set_status_pill("Thử lại sau", "warning")
+        self.logger.log(f"UPDATE ERROR: {message}")
+        QMessageBox.warning(self, "Không thể cập nhật", message)
+
     def run_dedupe(self):
         if self.is_busy:
             return
@@ -1540,7 +1819,7 @@ class MainWindow(QMainWindow):
         if self.is_busy:
             QMessageBox.information(
                 self,
-                "Đang xử lý dữ liệu",
+                "Đang thực hiện thao tác",
                 "PADOrganizer đang làm việc. Vui lòng chờ thao tác hiện tại hoàn tất trước khi đóng.",
             )
             event.ignore()

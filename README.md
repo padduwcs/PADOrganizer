@@ -14,8 +14,9 @@
 - Tìm tệp trùng theo nội dung trước khi quyết định giữ hoặc xóa.
 - Hoàn tác lần sắp xếp gần nhất trong phiên đang mở.
 - Giữ tệp cần dọn trong thùng rác nội bộ trước khi xóa vĩnh viễn.
+- Chủ động kiểm tra, tải và xác minh phiên bản mới từ GitHub khi bạn yêu cầu.
 
-Mọi thao tác đều diễn ra cục bộ. PADOrganizer không tải tệp hoặc dữ liệu cá nhân của bạn lên mạng.
+Mọi thao tác với tệp đều diễn ra cục bộ. PADOrganizer không tải tệp hoặc dữ liệu cá nhân của bạn lên mạng; ứng dụng chỉ kết nối GitHub khi bạn bấm **Kiểm tra cập nhật**.
 
 ## Cài đặt trên Windows
 
@@ -36,6 +37,15 @@ Bạn không cần cài Python hay thư viện bổ sung. Nếu không muốn c�
 4. Dùng **Hoàn tác** nếu muốn khôi phục lần sắp xếp vừa thực hiện.
 
 Để dọn tệp trùng, chọn **Tìm bản trùng**, đánh dấu bản muốn giữ rồi chuyển các bản còn lại vào thùng rác nội bộ. Hãy kiểm tra kỹ trước khi chọn **Xóa vĩnh viễn**.
+
+## Cập nhật phiên bản
+
+Chọn **Kiểm tra cập nhật** trong mục **Bảo trì**. PADOrganizer không tự kiểm tra trong nền.
+
+- Bản cài đặt: ứng dụng có thể tải Installer, xác minh SHA-256 và hỏi lại trước khi mở trình cài đặt.
+- Bản portable hoặc chạy từ mã nguồn: ứng dụng mở trang Release để bạn chọn file phù hợp.
+
+Quá trình cập nhật giữ nguyên quy tắc, nhật ký và các tệp trong thùng rác nội bộ.
 
 ## Dữ liệu và quyền riêng tư
 
