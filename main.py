@@ -812,11 +812,23 @@ class MainWindow(QMainWindow):
         self.btn_open_trash.clicked.connect(self.open_trash)
         side_layout.addWidget(self.btn_open_trash)
 
+        side_layout.addSpacing(14)
+        maintenance_section = QLabel("BẢO TRÌ")
+        maintenance_section.setObjectName("SidebarSection")
+        side_layout.addWidget(maintenance_section)
+
         self.btn_empty_trash = QPushButton("Dọn sạch thùng rác")
         self.btn_empty_trash.setObjectName("SidebarDanger")
         self.btn_empty_trash.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_empty_trash.clicked.connect(self.empty_trash)
         side_layout.addWidget(self.btn_empty_trash)
+
+        self.btn_clear_logs = QPushButton("Xóa nhật ký")
+        self.btn_clear_logs.setObjectName("SidebarButton")
+        self.btn_clear_logs.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_clear_logs.setToolTip("Xóa toàn bộ nhật ký hoạt động đang lưu trên máy")
+        self.btn_clear_logs.clicked.connect(self.clear_logs)
+        side_layout.addWidget(self.btn_clear_logs)
 
         side_layout.addStretch()
         privacy = QFrame()
@@ -1318,6 +1330,9 @@ class MainWindow(QMainWindow):
         )
         self.btn_empty_trash.setEnabled(has_content and not self.is_busy)
 
+    def check_logs_exist(self):
+        self.btn_clear_logs.setEnabled(not self.is_busy and self.logger.has_logs())
+
     def open_trash(self):
         PAD_TRASH_DIR.mkdir(parents=True, exist_ok=True)
         try:
@@ -1349,6 +1364,7 @@ class MainWindow(QMainWindow):
         self.side_rules_button.setEnabled(enabled)
         self.btn_open_trash.setEnabled(enabled)
         self.check_trash_exists()
+        self.check_logs_exist()
 
     def begin_operation(self, title, status):
         self.set_ui_enabled(False)
@@ -1462,6 +1478,32 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Thùng rác đã trống", "Toàn bộ nội dung đã được xóa.")
         except Exception as exc:
             QMessageBox.critical(self, "Không thể dọn thùng rác", str(exc))
+
+    def clear_logs(self):
+        if self.is_busy:
+            return
+        if not self.logger.has_logs():
+            self.check_logs_exist()
+            QMessageBox.information(self, "Nhật ký đang trống", "Không có nhật ký nào cần xóa.")
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Xóa nhật ký hoạt động",
+            "Xóa toàn bộ nhật ký hoạt động đang lưu trên máy? Thao tác này không ảnh hưởng đến tệp hoặc cấu hình của bạn.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            self.logger.clear_logs()
+            self.check_logs_exist()
+            self.set_status_pill("Đã xóa nhật ký", "ready")
+            QMessageBox.information(self, "Đã xóa nhật ký", "Nhật ký hoạt động đã được dọn sạch.")
+        except OSError as exc:
+            QMessageBox.critical(self, "Không thể xóa nhật ký", str(exc))
 
     def run_dedupe(self):
         if self.is_busy:

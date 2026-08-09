@@ -20,7 +20,7 @@
 - Kéo thả thư mục trực tiếp hoặc nhấn `Chọn thư mục`; số lượng tệp và tổng dung lượng được hiển thị tức thời.
 - Bộ quy tắc dạng bảng hỗ trợ thêm, chỉnh sửa, xóa, kiểm tra phần mở rộng trùng và khôi phục mặc định.
 - Màn hình xử lý bản trùng cho biết tệp sẽ bị tác động và dung lượng có thể giải phóng trước khi xác nhận.
-- Mọi thao tác diễn ra cục bộ; dữ liệu cá nhân không được tải lên mạng.
+- Mọi thao tác và nhật ký diễn ra cục bộ; người dùng có thể xóa nhật ký bất cứ lúc nào từ mục `Bảo trì`.
 
 Phím tắt:
 

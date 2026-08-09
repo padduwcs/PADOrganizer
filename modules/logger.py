@@ -27,7 +27,25 @@ class PADLogger:
             log_dir.mkdir(parents=True, exist_ok=True)
 
     def log(self, message):
+        self.ensure_log_directory()
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         # Ghi log với đường dẫn tuyệt đối đã xác định
         with open(self.log_path, "a", encoding="utf-8") as f:
             f.write(f"[{timestamp}] {message}\n")
+
+    def has_logs(self):
+        try:
+            return self.log_path.exists() and self.log_path.stat().st_size > 0
+        except OSError:
+            return False
+
+    def clear_logs(self):
+        if not self.log_path.exists():
+            return False
+
+        self.log_path.unlink()
+        try:
+            self.log_path.parent.rmdir()
+        except OSError:
+            pass
+        return True
