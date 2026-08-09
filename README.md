@@ -32,7 +32,18 @@ Phím tắt:
 | `Ctrl+Z` | Hoàn tác |
 | `Ctrl+,` | Mở quy tắc phân loại |
 
-## Cài đặt và chạy
+## Tải và sử dụng trên Windows
+
+Trong trang [Releases](https://github.com/padduwcs/PADOrganizer/releases), mỗi phiên bản cung cấp hai lựa chọn:
+
+- `PADOrganizer-Setup-vX.Y.Z.exe`: bản cài đặt được khuyên dùng. Installer tạo shortcut và thêm PADOrganizer vào danh sách ứng dụng có thể gỡ cài đặt của Windows.
+- `PADOrganizer-portable-vX.Y.Z.exe`: bản chạy trực tiếp, không cần cài đặt. Nên đặt tệp trong một thư mục riêng có quyền ghi thay vì chạy lâu dài từ `Downloads`.
+
+Ứng dụng đã đóng gói không yêu cầu người dùng cài Python. Lần đầu tải về, Windows có thể hiển thị cảnh báo SmartScreen vì tệp phát hành chưa có chữ ký số. Chỉ tiếp tục nếu tệp được tải từ repository chính thức và mã SHA-256 khớp với `SHA256SUMS.txt` trong cùng bản phát hành.
+
+Dữ liệu cục bộ gồm `config.json`, `logs/` và `PADOrganizer_Trash/` nằm cạnh ứng dụng. Cài phiên bản mới vào cùng vị trí sẽ giữ nguyên các dữ liệu này. Trình gỡ cài đặt cũng không tự động xóa dữ liệu do người dùng tạo; người dùng có thể xóa thư mục cài đặt còn lại nếu không muốn giữ chúng.
+
+## Chạy từ mã nguồn
 
 Yêu cầu Python 3.9 trở lên.
 
@@ -63,6 +74,8 @@ python main.py
 
 ## Đóng gói cho Windows
 
+### Bản portable
+
 Chạy:
 
 ```bat
@@ -78,6 +91,41 @@ python -m PyInstaller --clean PADOrganizer.spec
 
 Tệp thực thi được tạo tại `dist/PADOrganizer.exe`.
 
+### Installer và bộ tệp phát hành
+
+Cài [Inno Setup 6](https://jrsoftware.org/isdl.php), sau đó chạy:
+
+```bat
+build_release.bat 1.0.0
+```
+
+Script sẽ tạo trong thư mục `release/`:
+
+```text
+PADOrganizer-Setup-v1.0.0.exe
+PADOrganizer-portable-v1.0.0.exe
+SHA256SUMS.txt
+```
+
+Nếu đã có `dist/PADOrganizer.exe` và chỉ muốn tạo installer:
+
+```bat
+build_installer.bat 1.0.0
+```
+
+Installer mặc định cài vào `%LOCALAPPDATA%\Programs\PADOrganizer`, không yêu cầu quyền Administrator. Lựa chọn này phù hợp với cách ứng dụng hiện lưu cấu hình và dữ liệu cạnh tệp thực thi.
+
+## Phát hành trên GitHub
+
+Workflow `.github/workflows/release.yml` tự động build trên Windows và tạo GitHub Release khi đẩy một tag có dạng `vX.Y.Z`:
+
+```bash
+git tag -a v1.0.0 -m "PADOrganizer v1.0.0"
+git push origin v1.0.0
+```
+
+Workflow cũng có thể chạy thủ công từ tab **Actions** để kiểm tra artefact mà không tạo GitHub Release. Mỗi lần phát hành cần dùng một số phiên bản và tag mới.
+
 ## Cấu trúc dự án
 
 ```text
@@ -91,6 +139,14 @@ PADOrganizer/
 │   └── theme.py            # Hệ thống giao diện và hiệu ứng
 ├── PADOrganizer.spec       # Cấu hình PyInstaller
 ├── build.bat               # Script đóng gói cho Windows
+├── build_installer.bat     # Tạo installer từ tệp đã đóng gói
+├── build_release.bat       # Tạo toàn bộ artefact phát hành
+├── installer/
+│   └── PADOrganizer.iss    # Cấu hình Inno Setup
+├── scripts/
+│   └── New-Checksums.ps1   # Sinh mã kiểm tra SHA-256
+├── .github/workflows/
+│   └── release.yml         # Tự động build và phát hành theo tag
 ├── requirements.txt
 ├── requirements-dev.txt    # Công cụ chỉ dùng để đóng gói
 └── logo.ico

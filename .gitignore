@@ -29,6 +29,7 @@ Thumbs.db
 # Build folders
 build/
 dist/
+release/
 
 # Cấu hình người dùng
 config.json
