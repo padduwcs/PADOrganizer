@@ -451,6 +451,119 @@ APP_STYLE = """
 
     /* Dialogs and inputs */
     QDialog { background-color: #f6f7fb; color: #1a1d2a; }
+    QDialog#AppMessageDialog {
+        background-color: transparent;
+    }
+    QFrame#MessageCard {
+        background-color: #ffffff;
+        border: 1px solid #e2e5ed;
+        border-radius: 20px;
+    }
+    QFrame#MessageCard[variant="danger"] {
+        border-color: #f0d7d4;
+    }
+    QFrame#MessageCard[variant="success"] {
+        border-color: #dce9c5;
+    }
+    QFrame#MessageIcon {
+        background-color: #efecff;
+        border: 1px solid #ddd6ff;
+        border-radius: 15px;
+    }
+    QFrame#MessageIcon[variant="danger"] {
+        background-color: #fff0ee;
+        border-color: #f5d4d0;
+    }
+    QFrame#MessageIcon[variant="success"] {
+        background-color: #edf8d7;
+        border-color: #d8ebae;
+    }
+    QLabel#MessageIconText {
+        color: #654fde;
+        font-size: 22px;
+        font-weight: 850;
+    }
+    QLabel#MessageIconText[variant="danger"] {
+        color: #c64f4f;
+    }
+    QLabel#MessageIconText[variant="success"] {
+        color: #537b14;
+    }
+    QLabel#MessageKicker {
+        color: #6853dc;
+        font-size: 9px;
+        font-weight: 850;
+    }
+    QLabel#MessageKicker[variant="danger"] {
+        color: #b84b4b;
+    }
+    QLabel#MessageKicker[variant="success"] {
+        color: #587d1d;
+    }
+    QLabel#MessageTitle {
+        color: #1c1f2d;
+        font-size: 20px;
+        font-weight: 780;
+    }
+    QLabel#MessageText {
+        color: #6f7484;
+        font-size: 11px;
+    }
+    QFrame#MessageDivider {
+        background-color: #eceef3;
+        border: none;
+    }
+    QPushButton#MessageClose {
+        color: #9297a5;
+        background-color: transparent;
+        border: none;
+        border-radius: 8px;
+        padding: 0;
+        font-size: 18px;
+        font-weight: 500;
+    }
+    QPushButton#MessageClose:hover {
+        color: #2d303d;
+        background-color: #f0f1f5;
+    }
+    QPushButton#MessagePrimary,
+    QPushButton#MessageDanger,
+    QPushButton#MessageSecondary {
+        min-width: 112px;
+        min-height: 40px;
+        border-radius: 10px;
+        padding: 0 18px;
+        font-size: 12px;
+        font-weight: 750;
+    }
+    QPushButton#MessagePrimary {
+        color: #ffffff;
+        background-color: #6852df;
+        border: 1px solid #6852df;
+    }
+    QPushButton#MessagePrimary:hover {
+        background-color: #5943cd;
+        border-color: #5943cd;
+    }
+    QPushButton#MessageDanger {
+        color: #ffffff;
+        background-color: #cf5656;
+        border: 1px solid #cf5656;
+    }
+    QPushButton#MessageDanger:hover {
+        background-color: #ba454b;
+        border-color: #ba454b;
+    }
+    QPushButton#MessageSecondary {
+        color: #4b4f5d;
+        background-color: #ffffff;
+        border: 1px solid #dfe2ea;
+    }
+    QPushButton#MessageSecondary:hover {
+        color: #5c47d3;
+        background-color: #f3f0ff;
+        border-color: #c8bff2;
+    }
     QLabel#DialogEyebrow {
         color: #6b54e7;
         font-size: 10px;

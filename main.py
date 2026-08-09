@@ -241,6 +241,118 @@ class UpdateDownloadThread(QThread):
             self.failed.emit("Không thể tải bản cập nhật vào lúc này.")
 
 
+class AppMessageDialog(QDialog):
+    ICONS = {
+        "info": "i",
+        "success": "✓",
+        "danger": "!",
+    }
+
+    def __init__(
+        self,
+        kicker,
+        title,
+        message,
+        primary_text,
+        secondary_text=None,
+        variant="info",
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setObjectName("AppMessageDialog")
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setModal(True)
+        self.setFixedWidth(570)
+
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(18, 18, 18, 18)
+
+        card = QFrame()
+        card.setObjectName("MessageCard")
+        card.setProperty("variant", variant)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(24, 22, 24, 20)
+        card_layout.setSpacing(18)
+
+        top_layout = QHBoxLayout()
+        top_layout.setSpacing(15)
+        icon_frame = QFrame()
+        icon_frame.setObjectName("MessageIcon")
+        icon_frame.setProperty("variant", variant)
+        icon_frame.setFixedSize(48, 48)
+        icon_layout = QVBoxLayout(icon_frame)
+        icon_layout.setContentsMargins(0, 0, 0, 0)
+        icon_label = QLabel(self.ICONS.get(variant, "i"))
+        icon_label.setObjectName("MessageIconText")
+        icon_label.setProperty("variant", variant)
+        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon_layout.addWidget(icon_label)
+        top_layout.addWidget(icon_frame, 0, Qt.AlignmentFlag.AlignTop)
+
+        copy_layout = QVBoxLayout()
+        copy_layout.setSpacing(5)
+        kicker_label = QLabel(kicker.upper())
+        kicker_label.setObjectName("MessageKicker")
+        kicker_label.setProperty("variant", variant)
+        title_label = QLabel(title)
+        title_label.setObjectName("MessageTitle")
+        title_label.setWordWrap(True)
+        message_label = QLabel(message)
+        message_label.setObjectName("MessageText")
+        message_label.setWordWrap(True)
+        copy_layout.addWidget(kicker_label)
+        copy_layout.addWidget(title_label)
+        copy_layout.addWidget(message_label)
+        top_layout.addLayout(copy_layout, 1)
+
+        close_button = QPushButton("×")
+        close_button.setObjectName("MessageClose")
+        close_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_button.setToolTip("Đóng")
+        close_button.setFixedSize(32, 32)
+        close_button.clicked.connect(self.reject)
+        top_layout.addWidget(close_button, 0, Qt.AlignmentFlag.AlignTop)
+        card_layout.addLayout(top_layout)
+
+        divider = QFrame()
+        divider.setObjectName("MessageDivider")
+        divider.setFixedHeight(1)
+        card_layout.addWidget(divider)
+
+        actions = QHBoxLayout()
+        actions.setSpacing(10)
+        actions.addStretch()
+        self.secondary_button = None
+        if secondary_text:
+            self.secondary_button = QPushButton(secondary_text)
+            self.secondary_button.setObjectName("MessageSecondary")
+            self.secondary_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.secondary_button.clicked.connect(self.reject)
+            actions.addWidget(self.secondary_button)
+
+        self.primary_button = QPushButton(primary_text)
+        self.primary_button.setObjectName(
+            "MessageDanger" if variant == "danger" else "MessagePrimary"
+        )
+        self.primary_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.primary_button.clicked.connect(self.accept)
+        self.primary_button.setDefault(True)
+        actions.addWidget(self.primary_button)
+        card_layout.addLayout(actions)
+
+        outer_layout.addWidget(card)
+        add_shadow(card, 40, 9, 38)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        parent = self.parentWidget()
+        if parent is not None:
+            parent_center = parent.frameGeometry().center()
+            self.move(parent_center - self.rect().center())
+
+
 class UpdateDialog(QDialog):
     def __init__(self, release, installed_build, parent=None):
         super().__init__(parent)
@@ -1646,24 +1758,40 @@ class MainWindow(QMainWindow):
             return
         if not self.logger.has_logs():
             self.check_logs_exist()
-            QMessageBox.information(self, "Nhật ký đang trống", "Không có nhật ký nào cần xóa.")
+            AppMessageDialog(
+                "Bảo trì",
+                "Nhật ký đang trống",
+                "Không có nhật ký hoạt động nào cần dọn dẹp vào lúc này.",
+                "Đã hiểu",
+                variant="info",
+                parent=self,
+            ).exec()
             return
 
-        reply = QMessageBox.question(
-            self,
-            "Xóa nhật ký hoạt động",
-            "Xóa toàn bộ nhật ký hoạt động đang lưu trên máy? Thao tác này không ảnh hưởng đến tệp hoặc cấu hình của bạn.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
+        dialog = AppMessageDialog(
+            "Bảo trì dữ liệu",
+            "Xóa toàn bộ nhật ký hoạt động?",
+            "Nhật ký đang lưu trên máy sẽ được dọn sạch. Tệp cá nhân và cấu hình phân loại của bạn không bị ảnh hưởng.",
+            "Xóa nhật ký",
+            "Giữ lại",
+            variant="danger",
+            parent=self,
         )
-        if reply != QMessageBox.StandardButton.Yes:
+        if dialog.exec() != QDialog.DialogCode.Accepted:
             return
 
         try:
             self.logger.clear_logs()
             self.check_logs_exist()
             self.set_status_pill("Đã xóa nhật ký", "ready")
-            QMessageBox.information(self, "Đã xóa nhật ký", "Nhật ký hoạt động đã được dọn sạch.")
+            AppMessageDialog(
+                "Hoàn tất",
+                "Nhật ký đã được dọn sạch",
+                "PADOrganizer đã xóa nhật ký hoạt động. Tệp và cấu hình của bạn vẫn được giữ nguyên.",
+                "Đã hiểu",
+                variant="success",
+                parent=self,
+            ).exec()
         except OSError as exc:
             QMessageBox.critical(self, "Không thể xóa nhật ký", str(exc))
 
@@ -1688,11 +1816,14 @@ class MainWindow(QMainWindow):
             self.status_label.setText(f"Phiên bản đang sử dụng · v{APP_VERSION}")
             self.set_status_pill("Mới nhất", "ready")
             self.logger.log(f"UPDATE CHECK: Không có bản mới hơn v{APP_VERSION}.")
-            QMessageBox.information(
-                self,
-                "Không có bản cập nhật mới",
-                f"Không tìm thấy bản phát hành nào mới hơn PADOrganizer v{APP_VERSION}.",
-            )
+            AppMessageDialog(
+                "Cập nhật",
+                "Bạn đang dùng phiên bản mới nhất",
+                f"PADOrganizer v{APP_VERSION} hiện đã là bản phát hành mới nhất trên GitHub.",
+                "Đã hiểu",
+                variant="success",
+                parent=self,
+            ).exec()
             return
 
         self.pending_update_release = release
