@@ -7,9 +7,65 @@ APP_STYLE = """
         font-family: "Segoe UI Variable Text", "Segoe UI", sans-serif;
         outline: none;
     }
-    QMainWindow, QWidget#AppRoot, QScrollArea#MainScroll, QWidget#ScrollContent {
+    QMainWindow, QWidget#AppRoot, QWidget#WindowBody, QScrollArea#MainScroll, QWidget#ScrollContent {
         background-color: #f4f6fb;
         color: #171a28;
+    }
+    QWidget#AppRoot {
+        border: 1px solid #252a3b;
+    }
+
+    /* Custom title bar */
+    QFrame#TitleBar {
+        background-color: #0d101a;
+        border: none;
+        border-bottom: 1px solid #24293a;
+    }
+    QFrame#TitleBrandMark {
+        background-color: #735cf4;
+        border-radius: 7px;
+    }
+    QLabel#TitleBrandLetter {
+        color: #ffffff;
+        font-size: 12px;
+        font-weight: 850;
+    }
+    QLabel#WindowTitle {
+        color: #f4f5fa;
+        font-size: 12px;
+        font-weight: 750;
+    }
+    QLabel#WindowTitleSeparator {
+        color: #474d62;
+        font-size: 11px;
+    }
+    QLabel#WindowCaption {
+        color: #858b9f;
+        font-size: 10px;
+        font-weight: 550;
+    }
+    QPushButton#WindowControl, QPushButton#CloseControl {
+        color: #aeb3c3;
+        background-color: transparent;
+        border: none;
+        border-radius: 0;
+        padding: 0;
+        font-family: "Segoe UI Symbol", "Segoe UI", sans-serif;
+        font-size: 15px;
+        font-weight: 500;
+    }
+    QPushButton#WindowControl:hover {
+        color: #ffffff;
+        background-color: #24293a;
+    }
+    QPushButton#CloseControl:hover {
+        color: #ffffff;
+        background-color: #d9434e;
+    }
+    QSizeGrip#ResizeGrip {
+        width: 18px;
+        height: 18px;
+        background-color: transparent;
     }
     QToolTip {
         color: #ffffff;
@@ -80,21 +136,21 @@ APP_STYLE = """
     QFrame#PrivacyCard {
         background-color: #181c2c;
         border: 1px solid #292e43;
-        border-radius: 13px;
+        border-radius: 14px;
     }
     QLabel#PrivacyDot {
         color: #c9f36a;
-        font-size: 18px;
+        font-size: 17px;
         font-weight: 900;
     }
     QLabel#PrivacyTitle {
         color: #eff1f8;
-        font-size: 12px;
-        font-weight: 700;
+        font-size: 13px;
+        font-weight: 750;
     }
     QLabel#PrivacyText {
-        color: #858a9e;
-        font-size: 10px;
+        color: #a2a7b8;
+        font-size: 11px;
     }
 
     /* Top bar and hero */
@@ -163,23 +219,23 @@ APP_STYLE = """
     }
     QLabel#HeroMetricValue {
         color: #ffffff;
-        font-size: 20px;
+        font-size: 23px;
         font-weight: 800;
     }
     QLabel#HeroMetricValueDark {
         color: #202512;
-        font-size: 20px;
+        font-size: 23px;
         font-weight: 800;
     }
     QLabel#HeroMetricLabel {
-        color: #b6b5c7;
-        font-size: 9px;
-        font-weight: 700;
+        color: #c6c4d4;
+        font-size: 10px;
+        font-weight: 750;
     }
     QLabel#HeroMetricLabelDark {
         color: #4d572b;
-        font-size: 9px;
-        font-weight: 700;
+        font-size: 10px;
+        font-weight: 750;
     }
 
     /* Cards */

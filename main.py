@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QRadioButton,
     QScrollArea,
+    QSizeGrip,
     QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
@@ -623,6 +624,92 @@ class DedupeDialog(QDialog):
         self.accept()
 
 
+class TitleBar(QFrame):
+    def __init__(self, window):
+        super().__init__(window)
+        self.host_window = window
+        self.setObjectName("TitleBar")
+        self.setFixedHeight(46)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(14, 0, 0, 0)
+        layout.setSpacing(9)
+
+        mark = QFrame()
+        mark.setObjectName("TitleBrandMark")
+        mark.setFixedSize(24, 24)
+        mark_layout = QVBoxLayout(mark)
+        mark_layout.setContentsMargins(0, 0, 0, 0)
+        mark_text = QLabel("P")
+        mark_text.setObjectName("TitleBrandLetter")
+        mark_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        mark_text.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        mark_layout.addWidget(mark_text)
+        layout.addWidget(mark)
+
+        title = QLabel(APP_NAME)
+        title.setObjectName("WindowTitle")
+        title.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        layout.addWidget(title)
+
+        separator = QLabel("/")
+        separator.setObjectName("WindowTitleSeparator")
+        separator.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        layout.addWidget(separator)
+
+        caption = QLabel("Personal Archive Directory Organizer")
+        caption.setObjectName("WindowCaption")
+        caption.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        layout.addWidget(caption)
+        layout.addStretch()
+
+        self.minimize_button = self.make_control("−", "Thu nhỏ")
+        self.maximize_button = self.make_control("□", "Phóng to")
+        self.close_button = self.make_control("×", "Đóng", close_button=True)
+        self.minimize_button.clicked.connect(window.showMinimized)
+        self.maximize_button.clicked.connect(self.toggle_maximized)
+        self.close_button.clicked.connect(window.close)
+        layout.addWidget(self.minimize_button)
+        layout.addWidget(self.maximize_button)
+        layout.addWidget(self.close_button)
+
+    def make_control(self, text, tooltip, close_button=False):
+        button = QPushButton(text)
+        button.setObjectName("CloseControl" if close_button else "WindowControl")
+        button.setFixedSize(48, 46)
+        button.setToolTip(tooltip)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        return button
+
+    def toggle_maximized(self):
+        if self.host_window.isMaximized():
+            self.host_window.showNormal()
+        else:
+            self.host_window.showMaximized()
+        self.update_maximize_button()
+
+    def update_maximize_button(self):
+        maximized = self.host_window.isMaximized()
+        self.maximize_button.setText("❐" if maximized else "□")
+        self.maximize_button.setToolTip("Khôi phục" if maximized else "Phóng to")
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            window_handle = self.host_window.windowHandle()
+            if window_handle is not None:
+                window_handle.startSystemMove()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.toggle_maximized()
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -638,6 +725,7 @@ class MainWindow(QMainWindow):
         self.refresh_directory_summary()
 
     def init_ui(self):
+        self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
         self.setWindowTitle(APP_FULL_NAME)
         self.setMinimumSize(980, 700)
         self.resize(1220, 820)
@@ -650,12 +738,26 @@ class MainWindow(QMainWindow):
         root = QWidget()
         root.setObjectName("AppRoot")
         self.setCentralWidget(root)
-        root_layout = QHBoxLayout(root)
+        root_layout = QVBoxLayout(root)
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
 
-        self.build_sidebar(root_layout)
-        self.build_content(root_layout)
+        self.title_bar = TitleBar(self)
+        root_layout.addWidget(self.title_bar)
+
+        body = QWidget()
+        body.setObjectName("WindowBody")
+        body_layout = QHBoxLayout(body)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.setSpacing(0)
+        self.build_sidebar(body_layout)
+        self.build_content(body_layout)
+        root_layout.addWidget(body, 1)
+
+        self.resize_grip = QSizeGrip(root)
+        self.resize_grip.setObjectName("ResizeGrip")
+        self.resize_grip.setFixedSize(18, 18)
+        self.resize_grip.raise_()
 
     def build_sidebar(self, root_layout):
         self.sidebar = QFrame()
@@ -720,21 +822,23 @@ class MainWindow(QMainWindow):
         side_layout.addStretch()
         privacy = QFrame()
         privacy.setObjectName("PrivacyCard")
-        privacy_layout = QHBoxLayout(privacy)
-        privacy_layout.setContentsMargins(13, 12, 13, 12)
-        privacy_layout.setSpacing(9)
+        privacy_layout = QVBoxLayout(privacy)
+        privacy_layout.setContentsMargins(15, 14, 15, 14)
+        privacy_layout.setSpacing(6)
+        privacy_header = QHBoxLayout()
+        privacy_header.setSpacing(8)
         privacy_dot = QLabel("•")
         privacy_dot.setObjectName("PrivacyDot")
-        privacy_text = QVBoxLayout()
-        privacy_text.setSpacing(2)
         privacy_title = QLabel("Riêng tư tuyệt đối")
         privacy_title.setObjectName("PrivacyTitle")
-        privacy_hint = QLabel("Xử lý cục bộ trên máy\nKhông tải dữ liệu lên mạng")
+        privacy_header.addWidget(privacy_dot)
+        privacy_header.addWidget(privacy_title)
+        privacy_header.addStretch()
+        privacy_hint = QLabel("Mọi thao tác diễn ra trên thiết bị.\nKhông có dữ liệu được tải lên mạng.")
         privacy_hint.setObjectName("PrivacyText")
-        privacy_text.addWidget(privacy_title)
-        privacy_text.addWidget(privacy_hint)
-        privacy_layout.addWidget(privacy_dot, 0, Qt.AlignmentFlag.AlignTop)
-        privacy_layout.addLayout(privacy_text)
+        privacy_hint.setWordWrap(True)
+        privacy_layout.addLayout(privacy_header)
+        privacy_layout.addWidget(privacy_hint)
         side_layout.addWidget(privacy)
         root_layout.addWidget(self.sidebar)
 
@@ -793,12 +897,15 @@ class MainWindow(QMainWindow):
 
         metrics = QHBoxLayout()
         metrics.setSpacing(10)
-        folder_metric, self.hero_folder_value = self.make_hero_metric("THƯ MỤC", "Chưa chọn")
+        folder_metric, self.hero_folder_value = self.make_hero_metric(
+            "THƯ MỤC", "Chưa chọn", width=166
+        )
         rules_metric, self.hero_rules_value = self.make_hero_metric("NHÓM QUY TẮC", "0")
         files_metric, self.hero_files_value = self.make_hero_metric("TỆP SẴN SÀNG", "—", accent=True)
-        metrics.addWidget(folder_metric)
-        metrics.addWidget(rules_metric)
-        metrics.addWidget(files_metric)
+        metrics.addWidget(folder_metric, 0, Qt.AlignmentFlag.AlignVCenter)
+        metrics.addWidget(rules_metric, 0, Qt.AlignmentFlag.AlignVCenter)
+        metrics.addWidget(files_metric, 0, Qt.AlignmentFlag.AlignVCenter)
+        metrics.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         self.hero_layout.addLayout(metrics)
         add_shadow(hero, 40, 12, 42)
         layout.addWidget(hero)
@@ -819,16 +926,17 @@ class MainWindow(QMainWindow):
         root_layout.addWidget(scroll, 1)
         self.apply_responsive_layout()
 
-    def make_hero_metric(self, label_text, value_text, accent=False):
+    def make_hero_metric(self, label_text, value_text, accent=False, width=132):
         frame = QFrame()
         frame.setObjectName("HeroMetricAccent" if accent else "HeroMetric")
-        frame.setMinimumWidth(106)
+        frame.setFixedSize(width, 96)
         metric_layout = QVBoxLayout(frame)
-        metric_layout.setContentsMargins(14, 12, 14, 12)
-        metric_layout.setSpacing(2)
+        metric_layout.setContentsMargins(14, 11, 14, 11)
+        metric_layout.setSpacing(4)
+        metric_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         value = QLabel(value_text)
         value.setObjectName("HeroMetricValueDark" if accent else "HeroMetricValue")
-        value.setMaximumWidth(190)
+        value.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         label = QLabel(label_text)
         label.setObjectName("HeroMetricLabelDark" if accent else "HeroMetricLabel")
         metric_layout.addWidget(value)
@@ -1065,6 +1173,11 @@ class MainWindow(QMainWindow):
         super().resizeEvent(event)
         if hasattr(self, "cards_layout"):
             self.apply_responsive_layout()
+        if hasattr(self, "title_bar"):
+            self.title_bar.update_maximize_button()
+        if hasattr(self, "resize_grip"):
+            self.resize_grip.move(self.width() - 18, self.height() - 18)
+            self.resize_grip.setVisible(not self.isMaximized())
 
     def apply_responsive_layout(self):
         compact = self.width() < 1200
@@ -1159,7 +1272,7 @@ class MainWindow(QMainWindow):
         self.folder_path_label.setToolTip(str(path))
         self.file_count_label.setText(f"{len(files):,}")
         self.total_size_label.setText(format_bytes(total_size))
-        self.hero_folder_value.setText(display_name[:18] + ("…" if len(display_name) > 18 else ""))
+        self.hero_folder_value.setText(display_name[:12] + ("…" if len(display_name) > 12 else ""))
         self.hero_folder_value.setToolTip(str(path))
         self.hero_files_value.setText(f"{len(files):,}")
         self.dropzone.setProperty("selected", True)
@@ -1392,7 +1505,6 @@ class MainWindow(QMainWindow):
             event.ignore()
             return
         event.accept()
-
 
 def main():
     app = QApplication(sys.argv)
