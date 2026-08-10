@@ -18,6 +18,7 @@ from PyQt6.QtGui import (
     QColor,
     QDesktopServices,
     QFont,
+    QFontMetrics,
     QIcon,
     QKeySequence,
     QPainter,
@@ -32,6 +33,7 @@ from PyQt6.QtWidgets import (
     QDialog,
     QFileDialog,
     QFrame,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
@@ -54,7 +56,24 @@ from PyQt6.QtWidgets import (
 
 from modules import ConfigManager, Deduplicator, FileMover, PADLogger
 from modules.config_manager import BASE_DIR, DEFAULT_CONFIG, PAD_TRASH_DIR
-from modules.theme import APP_STYLE, add_shadow
+from modules.i18n import (
+    LocalizedDialog as QDialog,
+    LocalizedFileDialog as QFileDialog,
+    LocalizedGroupBox as QGroupBox,
+    LocalizedLabel as QLabel,
+    LocalizedLineEdit as QLineEdit,
+    LocalizedMainWindow as QMainWindow,
+    LocalizedMessageBox as QMessageBox,
+    LocalizedPushButton as QPushButton,
+    LocalizedRadioButton as QRadioButton,
+    LocalizedTableWidget as QTableWidget,
+    StandardButtonTranslator,
+    get_language,
+    retranslate_tree,
+    set_language,
+    translate,
+)
+from modules.theme import get_app_style, add_shadow
 from modules.updater import (
     UpdateError,
     download_installer,
@@ -106,6 +125,14 @@ class ToggleSwitch(QAbstractButton):
         self._animation.setEasingCurve(QEasingCurve.Type.OutCubic)
         self.toggled.connect(self._animate)
 
+    def setToolTip(self, text):
+        self._source_tooltip = text
+        super().setToolTip(translate(text))
+
+    def retranslate(self):
+        if hasattr(self, "_source_tooltip"):
+            super().setToolTip(translate(self._source_tooltip))
+
     def _animate(self, checked):
         self._animation.stop()
         self._animation.setStartValue(self._handle_position)
@@ -126,10 +153,49 @@ class ToggleSwitch(QAbstractButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor("#735cf4") if self.isChecked() else QColor("#d4d8e2"))
+        dark_mode = QApplication.instance().property("theme") == "dark"
+        off_color = "#555c6c" if dark_mode else "#c4cad6"
+        painter.setBrush(QColor("#8d79f5") if self.isChecked() else QColor(off_color))
         painter.drawRoundedRect(QRectF(0, 0, 46, 25), 12.5, 12.5)
         painter.setBrush(QColor("#ffffff"))
         painter.drawEllipse(QRectF(self._handle_position, 3, 19, 19))
+
+
+class FittedLabel(QLabel):
+    """Render a single line completely, shrinking only when the available width requires it."""
+
+    def __init__(self, text="", parent=None, minimum_pixel_size=11):
+        super().__init__(text, parent)
+        self.minimum_pixel_size = minimum_pixel_size
+
+    def fitted_font(self):
+        font = QFont(self.font())
+        pixel_size = font.pixelSize()
+        if pixel_size <= 0:
+            pixel_size = max(1, round(font.pointSizeF() * 96 / 72))
+
+        available_width = max(1, self.contentsRect().width())
+        while pixel_size > self.minimum_pixel_size:
+            font.setPixelSize(pixel_size)
+            if QFontMetrics(font).horizontalAdvance(self.text()) <= available_width:
+                break
+            pixel_size -= 1
+
+        font.setPixelSize(pixel_size)
+        return font
+
+    def paintEvent(self, event):
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        font = self.fitted_font()
+        painter.setFont(font)
+        painter.setPen(self.palette().color(self.foregroundRole()))
+        painter.drawText(
+            self.contentsRect(),
+            self.alignment() | Qt.TextFlag.TextSingleLine,
+            self.text(),
+        )
 
 
 class WorkerThread(QThread):
@@ -400,7 +466,7 @@ class UpdateDialog(QDialog):
         layout.addWidget(notes_title)
         notes = QTextBrowser()
         notes.setObjectName("ReleaseNotes")
-        notes.setPlainText(release.notes[:6000])
+        notes.setPlainText(translate(release.notes[:6000]))
         notes.setOpenExternalLinks(True)
         notes.setMinimumHeight(150)
         layout.addWidget(notes, 1)
@@ -884,7 +950,7 @@ class TitleBar(QFrame):
         super().__init__(window)
         self.host_window = window
         self.setObjectName("TitleBar")
-        self.setFixedHeight(46)
+        self.setFixedHeight(42)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(14, 0, 0, 0)
@@ -931,7 +997,7 @@ class TitleBar(QFrame):
     def make_control(self, text, tooltip, close_button=False):
         button = QPushButton(text)
         button.setObjectName("CloseControl" if close_button else "WindowControl")
-        button.setFixedSize(48, 46)
+        button.setFixedSize(46, 42)
         button.setToolTip(tooltip)
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         return button
@@ -969,6 +1035,11 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.config_manager = ConfigManager()
+        self.current_theme = self.config_manager.get_theme()
+        set_language(self.config_manager.get_language())
+        app = QApplication.instance()
+        app.setProperty("theme", self.current_theme)
+        app.setStyleSheet(get_app_style(self.current_theme))
         self.logger = PADLogger()
         self.mover = FileMover()
         self.target_dir = ""
@@ -1020,10 +1091,10 @@ class MainWindow(QMainWindow):
     def build_sidebar(self, root_layout):
         self.sidebar = QFrame()
         self.sidebar.setObjectName("Sidebar")
-        self.sidebar.setFixedWidth(238)
+        self.sidebar.setFixedWidth(220)
         side_layout = QVBoxLayout(self.sidebar)
-        side_layout.setContentsMargins(22, 24, 22, 22)
-        side_layout.setSpacing(8)
+        side_layout.setContentsMargins(16, 20, 16, 16)
+        side_layout.setSpacing(7)
 
         brand = QHBoxLayout()
         brand.setSpacing(11)
@@ -1040,17 +1111,14 @@ class MainWindow(QMainWindow):
         brand_text.setSpacing(0)
         brand_title = QLabel(APP_NAME)
         brand_title.setObjectName("BrandTitle")
-        brand_caption = QLabel("PERSONAL ARCHIVE")
-        brand_caption.setObjectName("BrandCaption")
         brand_text.addWidget(brand_title)
-        brand_text.addWidget(brand_caption)
         brand.addWidget(mark)
         brand.addLayout(brand_text)
         brand.addStretch()
         side_layout.addLayout(brand)
-        side_layout.addSpacing(30)
+        side_layout.addSpacing(22)
 
-        section = QLabel("KHÔNG GIAN LÀM VIỆC")
+        section = QLabel("LÀM VIỆC")
         section.setObjectName("SidebarSection")
         side_layout.addWidget(section)
 
@@ -1062,16 +1130,18 @@ class MainWindow(QMainWindow):
         self.side_rules_button = QPushButton("Quy tắc phân loại")
         self.side_rules_button.setObjectName("SidebarButton")
         self.side_rules_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.side_rules_button.setToolTip("Quản lý nhóm tệp và phần mở rộng · Ctrl+,")
         self.side_rules_button.clicked.connect(self.open_settings)
         side_layout.addWidget(self.side_rules_button)
 
         self.btn_open_trash = QPushButton("Mở thùng rác")
         self.btn_open_trash.setObjectName("SidebarButton")
         self.btn_open_trash.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_open_trash.setToolTip("Mở PADOrganizer_Trash trong File Explorer")
         self.btn_open_trash.clicked.connect(self.open_trash)
         side_layout.addWidget(self.btn_open_trash)
 
-        side_layout.addSpacing(14)
+        side_layout.addSpacing(12)
         maintenance_section = QLabel("BẢO TRÌ")
         maintenance_section.setObjectName("SidebarSection")
         side_layout.addWidget(maintenance_section)
@@ -1086,6 +1156,7 @@ class MainWindow(QMainWindow):
         self.btn_empty_trash = QPushButton("Dọn sạch thùng rác")
         self.btn_empty_trash.setObjectName("SidebarDanger")
         self.btn_empty_trash.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_empty_trash.setToolTip("Xóa vĩnh viễn toàn bộ nội dung trong thùng rác nội bộ")
         self.btn_empty_trash.clicked.connect(self.empty_trash)
         side_layout.addWidget(self.btn_empty_trash)
 
@@ -1096,29 +1167,52 @@ class MainWindow(QMainWindow):
         self.btn_clear_logs.clicked.connect(self.clear_logs)
         side_layout.addWidget(self.btn_clear_logs)
 
+        side_layout.addSpacing(12)
+        appearance_section = QLabel("GIAO DIỆN")
+        appearance_section.setObjectName("SidebarSection")
+        side_layout.addWidget(appearance_section)
+
+        preferences = QFrame()
+        preferences.setObjectName("PreferenceCard")
+        preferences_layout = QHBoxLayout(preferences)
+        preferences_layout.setContentsMargins(5, 5, 5, 5)
+        preferences_layout.setSpacing(5)
+        self.theme_button = QPushButton()
+        self.theme_button.setObjectName("PreferenceButton")
+        self.theme_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.theme_button.clicked.connect(self.toggle_theme)
+        self.language_button = QPushButton()
+        self.language_button.setObjectName("PreferenceButton")
+        self.language_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.language_button.clicked.connect(self.toggle_language)
+        preferences_layout.addWidget(self.theme_button)
+        preferences_layout.addWidget(self.language_button)
+        side_layout.addWidget(preferences)
+        self.update_preference_labels()
+
         side_layout.addStretch()
-        version_label = QLabel(f"PADOrganizer  ·  v{APP_VERSION}")
+        version_label = QLabel(f"v{APP_VERSION}")
         version_label.setObjectName("VersionLabel")
+        version_label.setToolTip(f"PADOrganizer v{APP_VERSION}")
         version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         side_layout.addWidget(version_label)
         side_layout.addSpacing(4)
         privacy = QFrame()
         privacy.setObjectName("PrivacyCard")
         privacy_layout = QVBoxLayout(privacy)
-        privacy_layout.setContentsMargins(15, 14, 15, 14)
-        privacy_layout.setSpacing(6)
+        privacy_layout.setContentsMargins(12, 11, 12, 11)
+        privacy_layout.setSpacing(3)
         privacy_header = QHBoxLayout()
         privacy_header.setSpacing(8)
         privacy_dot = QLabel("•")
         privacy_dot.setObjectName("PrivacyDot")
-        privacy_title = QLabel("Riêng tư tuyệt đối")
+        privacy_title = QLabel("Riêng tư")
         privacy_title.setObjectName("PrivacyTitle")
+        privacy_title.setToolTip("Tệp cá nhân không được tải lên dịch vụ đám mây.")
         privacy_header.addWidget(privacy_dot)
         privacy_header.addWidget(privacy_title)
         privacy_header.addStretch()
-        privacy_hint = QLabel(
-            "Tệp cá nhân luôn ở trên thiết bị.\nChỉ kết nối GitHub khi bạn kiểm tra cập nhật."
-        )
+        privacy_hint = QLabel("Xử lý trên thiết bị")
         privacy_hint.setObjectName("PrivacyText")
         privacy_hint.setWordWrap(True)
         privacy_layout.addLayout(privacy_header)
@@ -1134,21 +1228,16 @@ class MainWindow(QMainWindow):
         content = QWidget()
         content.setObjectName("ScrollContent")
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(34, 28, 34, 32)
-        layout.setSpacing(20)
+        layout.setContentsMargins(30, 26, 30, 30)
+        layout.setSpacing(18)
 
         header = QHBoxLayout()
         heading = QVBoxLayout()
         heading.setSpacing(3)
-        eyebrow = QLabel("TRUNG TÂM SẮP XẾP")
-        eyebrow.setObjectName("PageEyebrow")
-        title = QLabel("Không gian của bạn, ngăn nắp hơn.")
+        title = QLabel("Sắp xếp tệp.")
         title.setObjectName("PageTitle")
-        subtitle = QLabel("Một luồng làm việc rõ ràng để phân loại, tìm bản trùng và khôi phục khi cần.")
-        subtitle.setObjectName("PageSubtitle")
-        heading.addWidget(eyebrow)
+        title.setToolTip("Phân loại, tìm tệp trùng và khôi phục tệp ngay trên thiết bị.")
         heading.addWidget(title)
-        heading.addWidget(subtitle)
         header.addLayout(heading)
         header.addStretch()
         self.status_pill = QLabel("Sẵn sàng")
@@ -1164,28 +1253,20 @@ class MainWindow(QMainWindow):
         self.hero_layout.setSpacing(24)
         hero_copy = QVBoxLayout()
         hero_copy.setSpacing(7)
-        hero_kicker = QLabel("PADORGANIZER · LOCAL FIRST")
-        hero_kicker.setObjectName("HeroKicker")
-        hero_title = QLabel("Dọn một lần. Nhẹ đầu cả ngày.")
+        hero_title = QLabel("Gọn đúng chỗ.")
         hero_title.setObjectName("HeroTitle")
-        hero_text = QLabel(
-            "Chọn một thư mục, xem nhanh quy mô và để PADOrganizer đưa từng tệp về đúng chỗ."
-        )
-        hero_text.setObjectName("HeroText")
-        hero_text.setWordWrap(True)
-        hero_copy.addWidget(hero_kicker)
+        hero_title.setToolTip("Chọn thư mục và để PADOrganizer xử lý phần còn lại.")
         hero_copy.addWidget(hero_title)
-        hero_copy.addWidget(hero_text)
         hero_copy.addStretch()
         self.hero_layout.addLayout(hero_copy, 1)
 
         metrics = QHBoxLayout()
         metrics.setSpacing(10)
         folder_metric, self.hero_folder_value = self.make_hero_metric(
-            "THƯ MỤC", "Chưa chọn", width=166
+            "THƯ MỤC", "Chưa chọn", width=180
         )
-        rules_metric, self.hero_rules_value = self.make_hero_metric("NHÓM QUY TẮC", "0")
-        files_metric, self.hero_files_value = self.make_hero_metric("TỆP SẴN SÀNG", "—", accent=True)
+        rules_metric, self.hero_rules_value = self.make_hero_metric("QUY TẮC", "0")
+        files_metric, self.hero_files_value = self.make_hero_metric("TỆP", "—", accent=True)
         metrics.addWidget(folder_metric, 0, Qt.AlignmentFlag.AlignVCenter)
         metrics.addWidget(rules_metric, 0, Qt.AlignmentFlag.AlignVCenter)
         metrics.addWidget(files_metric, 0, Qt.AlignmentFlag.AlignVCenter)
@@ -1210,15 +1291,15 @@ class MainWindow(QMainWindow):
         root_layout.addWidget(scroll, 1)
         self.apply_responsive_layout()
 
-    def make_hero_metric(self, label_text, value_text, accent=False, width=132):
+    def make_hero_metric(self, label_text, value_text, accent=False, width=150):
         frame = QFrame()
         frame.setObjectName("HeroMetricAccent" if accent else "HeroMetric")
-        frame.setFixedSize(width, 96)
+        frame.setFixedSize(width, 88)
         metric_layout = QVBoxLayout(frame)
         metric_layout.setContentsMargins(14, 11, 14, 11)
         metric_layout.setSpacing(4)
         metric_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
-        value = QLabel(value_text)
+        value = FittedLabel(value_text)
         value.setObjectName("HeroMetricValueDark" if accent else "HeroMetricValue")
         value.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         label = QLabel(label_text)
@@ -1240,13 +1321,11 @@ class MainWindow(QMainWindow):
         badge = QLabel("BƯỚC 01")
         badge.setObjectName("StepBadge")
         badge.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        title = QLabel("Chọn không gian cần sắp xếp")
+        title = QLabel("Chọn thư mục")
         title.setObjectName("CardTitle")
-        description = QLabel("Chỉ các tệp nằm trực tiếp trong thư mục được xử lý.")
-        description.setObjectName("CardText")
+        title.setToolTip("Chỉ các tệp nằm trực tiếp trong thư mục được xử lý.")
         text.addWidget(badge, 0, Qt.AlignmentFlag.AlignLeft)
         text.addWidget(title)
-        text.addWidget(description)
         heading.addLayout(text)
         heading.addStretch()
         card_layout.addLayout(heading)
@@ -1273,18 +1352,20 @@ class MainWindow(QMainWindow):
 
         drop_copy = QVBoxLayout()
         drop_copy.setSpacing(2)
-        self.folder_title_label = QLabel("Kéo thả thư mục vào đây")
+        self.folder_title_label = QLabel("Thả thư mục vào đây")
         self.folder_title_label.setObjectName("DropTitle")
-        self.folder_path_label = QLabel("hoặc chọn từ máy tính của bạn")
+        self.folder_title_label.setToolTip("Kéo một thư mục từ File Explorer và thả vào khu vực này.")
+        self.folder_path_label = QLabel("")
         self.folder_path_label.setObjectName("DropPath")
         self.folder_path_label.setWordWrap(True)
         drop_copy.addWidget(self.folder_title_label)
         drop_copy.addWidget(self.folder_path_label)
         drop_layout.addLayout(drop_copy, 1)
 
-        self.btn_select = QPushButton("Chọn thư mục")
+        self.btn_select = QPushButton("Duyệt...")
         self.btn_select.setObjectName("SecondaryButton")
         self.btn_select.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_select.setToolTip("Mở hộp thoại chọn thư mục · Ctrl+O")
         self.btn_select.clicked.connect(self.select_directory)
         drop_layout.addWidget(self.btn_select)
         card_layout.addWidget(self.dropzone)
@@ -1323,41 +1404,43 @@ class MainWindow(QMainWindow):
         badge = QLabel("BƯỚC 02")
         badge.setObjectName("StepBadge")
         badge.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        title = QLabel("Tinh chỉnh cách tổ chức")
+        title = QLabel("Tùy chọn sắp xếp")
         title.setObjectName("CardTitle")
-        description = QLabel("Mặc định an toàn, đủ linh hoạt khi bạn cần.")
-        description.setObjectName("CardText")
+        title.setToolTip("Điều chỉnh cấu trúc thư mục và quy tắc phân loại.")
         layout.addWidget(badge, 0, Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(title)
-        layout.addWidget(description)
 
-        date_row = QFrame()
-        date_row.setObjectName("OptionRow")
-        date_layout = QHBoxLayout(date_row)
+        self.tool_options_layout = QGridLayout()
+        self.tool_options_layout.setSpacing(10)
+
+        self.date_row = QFrame()
+        self.date_row.setObjectName("OptionRow")
+        date_layout = QHBoxLayout(self.date_row)
         date_layout.setContentsMargins(13, 11, 13, 11)
         date_copy = QVBoxLayout()
         date_copy.setSpacing(1)
         date_title = QLabel("Chia theo Năm–Tháng")
         date_title.setObjectName("OptionTitle")
-        date_text = QLabel("Tạo thêm tầng 2026-08 trong mỗi nhóm")
-        date_text.setObjectName("OptionText")
+        date_title.setToolTip("Tạo thêm thư mục Năm–Tháng, ví dụ 2026-08, trong mỗi nhóm.")
         date_copy.addWidget(date_title)
-        date_copy.addWidget(date_text)
         self.date_toggle = ToggleSwitch()
+        self.date_toggle.setToolTip(
+            "Tạo thêm thư mục Năm–Tháng, ví dụ 2026-08, trong mỗi nhóm."
+        )
         self.date_toggle.setChecked(self.config_manager.is_sort_by_date_enabled())
         self.date_toggle.toggled.connect(self.save_date_setting)
         date_layout.addLayout(date_copy, 1)
         date_layout.addWidget(self.date_toggle)
-        layout.addWidget(date_row)
 
-        rules_row = QFrame()
-        rules_row.setObjectName("OptionRow")
-        rules_layout = QHBoxLayout(rules_row)
+        self.rules_row = QFrame()
+        self.rules_row.setObjectName("OptionRow")
+        rules_layout = QHBoxLayout(self.rules_row)
         rules_layout.setContentsMargins(13, 11, 13, 11)
         rules_copy = QVBoxLayout()
         rules_copy.setSpacing(1)
         rules_title = QLabel("Bộ quy tắc hiện tại")
         rules_title.setObjectName("OptionTitle")
+        rules_title.setToolTip("Xem và chỉnh sửa nhóm thư mục cùng các phần mở rộng tương ứng.")
         self.rules_summary_label = QLabel("Đang tải...")
         self.rules_summary_label.setObjectName("OptionText")
         rules_copy.addWidget(rules_title)
@@ -1365,19 +1448,20 @@ class MainWindow(QMainWindow):
         self.quick_rules_button = QPushButton("Quản lý")
         self.quick_rules_button.setObjectName("LinkButton")
         self.quick_rules_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.quick_rules_button.setToolTip("Mở trình quản lý quy tắc · Ctrl+,")
         self.quick_rules_button.clicked.connect(self.open_settings)
         rules_layout.addLayout(rules_copy, 1)
         rules_layout.addWidget(self.quick_rules_button)
-        layout.addWidget(rules_row)
 
-        trash_row = QFrame()
-        trash_row.setObjectName("OptionRow")
-        trash_layout = QHBoxLayout(trash_row)
+        self.trash_row = QFrame()
+        self.trash_row.setObjectName("OptionRow")
+        trash_layout = QHBoxLayout(self.trash_row)
         trash_layout.setContentsMargins(13, 11, 13, 11)
         trash_copy = QVBoxLayout()
         trash_copy.setSpacing(1)
         trash_title = QLabel("Thùng rác nội bộ")
         trash_title.setObjectName("OptionTitle")
+        trash_title.setToolTip("Nơi giữ tạm các tệp đã loại bỏ để bạn có thể khôi phục.")
         self.trash_summary_label = QLabel("Đang kiểm tra...")
         self.trash_summary_label.setObjectName("OptionText")
         trash_copy.addWidget(trash_title)
@@ -1386,17 +1470,16 @@ class MainWindow(QMainWindow):
         self.trash_badge.setObjectName("OptionBadge")
         trash_layout.addLayout(trash_copy, 1)
         trash_layout.addWidget(self.trash_badge)
-        layout.addWidget(trash_row)
-        layout.addStretch()
+        layout.addLayout(self.tool_options_layout)
         add_shadow(card, 30, 8, 25)
         return card
 
     def build_action_dock(self):
         dock = QFrame()
         dock.setObjectName("ActionDock")
-        layout = QHBoxLayout(dock)
-        layout.setContentsMargins(22, 18, 22, 18)
-        layout.setSpacing(18)
+        self.action_dock_layout = QHBoxLayout(dock)
+        self.action_dock_layout.setContentsMargins(20, 16, 20, 16)
+        self.action_dock_layout.setSpacing(16)
 
         status_area = QVBoxLayout()
         status_area.setSpacing(6)
@@ -1417,26 +1500,29 @@ class MainWindow(QMainWindow):
         status_area.addWidget(self.action_title_label)
         status_area.addLayout(progress_header)
         status_area.addWidget(self.progress)
-        layout.addLayout(status_area, 1)
+        self.action_dock_layout.addLayout(status_area, 1)
 
-        buttons = QHBoxLayout()
-        buttons.setSpacing(9)
+        self.action_buttons_layout = QHBoxLayout()
+        self.action_buttons_layout.setSpacing(8)
         self.btn_undo = QPushButton("Hoàn tác")
         self.btn_undo.setObjectName("DarkButton")
         self.btn_undo.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_undo.setToolTip("Hoàn tác lần sắp xếp gần nhất · Ctrl+Z")
         self.btn_undo.clicked.connect(self.undo_action)
         self.btn_dedupe = QPushButton("Tìm bản trùng")
         self.btn_dedupe.setObjectName("DarkButton")
         self.btn_dedupe.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_dedupe.setToolTip("Tìm các tệp có nội dung giống nhau · Ctrl+D")
         self.btn_dedupe.clicked.connect(self.run_dedupe)
         self.btn_run = QPushButton("Tổ chức ngay")
         self.btn_run.setObjectName("PrimaryButton")
         self.btn_run.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_run.setToolTip("Bắt đầu sắp xếp thư mục đã chọn · Ctrl+Enter")
         self.btn_run.clicked.connect(self.run_organizer)
-        buttons.addWidget(self.btn_undo)
-        buttons.addWidget(self.btn_dedupe)
-        buttons.addWidget(self.btn_run)
-        layout.addLayout(buttons)
+        self.action_buttons_layout.addWidget(self.btn_undo)
+        self.action_buttons_layout.addWidget(self.btn_dedupe)
+        self.action_buttons_layout.addWidget(self.btn_run)
+        self.action_dock_layout.addLayout(self.action_buttons_layout)
         add_shadow(dock, 38, 10, 38)
         return dock
 
@@ -1455,7 +1541,7 @@ class MainWindow(QMainWindow):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if hasattr(self, "cards_layout"):
+        if hasattr(self, "action_dock_layout"):
             self.apply_responsive_layout()
         if hasattr(self, "title_bar"):
             self.title_bar.update_maximize_button()
@@ -1464,17 +1550,43 @@ class MainWindow(QMainWindow):
             self.resize_grip.setVisible(not self.isMaximized())
 
     def apply_responsive_layout(self):
-        compact = self.width() < 1200
-        direction = (
+        hero_compact = self.width() < 1600
+        cards_compact = self.width() < 1600
+        action_compact = self.width() < 1600
+        tool_grid_two_columns = 1120 <= self.width() < 1600
+        hero_direction = (
             QBoxLayout.Direction.TopToBottom
-            if compact
+            if hero_compact
             else QBoxLayout.Direction.LeftToRight
         )
-        self.hero_layout.setDirection(direction)
-        self.cards_layout.setDirection(direction)
-        self.hero_layout.setSpacing(16 if compact else 24)
-        self.cards_layout.setSpacing(14 if compact else 18)
-        self.sidebar.setFixedWidth(238)
+        cards_direction = (
+            QBoxLayout.Direction.TopToBottom
+            if cards_compact
+            else QBoxLayout.Direction.LeftToRight
+        )
+        self.hero_layout.setDirection(hero_direction)
+        self.cards_layout.setDirection(cards_direction)
+        self.action_dock_layout.setDirection(
+            QBoxLayout.Direction.TopToBottom
+            if action_compact
+            else QBoxLayout.Direction.LeftToRight
+        )
+        for option_row in (self.date_row, self.rules_row, self.trash_row):
+            self.tool_options_layout.removeWidget(option_row)
+        if tool_grid_two_columns:
+            self.tool_options_layout.addWidget(self.date_row, 0, 0)
+            self.tool_options_layout.addWidget(self.rules_row, 0, 1)
+            self.tool_options_layout.addWidget(self.trash_row, 1, 0, 1, 2)
+            self.tool_options_layout.setColumnStretch(0, 1)
+            self.tool_options_layout.setColumnStretch(1, 1)
+        else:
+            self.tool_options_layout.addWidget(self.date_row, 0, 0)
+            self.tool_options_layout.addWidget(self.rules_row, 1, 0)
+            self.tool_options_layout.addWidget(self.trash_row, 2, 0)
+        self.hero_layout.setSpacing(16 if hero_compact else 24)
+        self.cards_layout.setSpacing(14 if cards_compact else 18)
+        self.action_dock_layout.setSpacing(12 if action_compact else 16)
+        self.sidebar.setFixedWidth(220)
 
     def on_dropzone_click(self, event):
         if event.button() == Qt.MouseButton.LeftButton and not self.is_busy:
@@ -1526,8 +1638,8 @@ class MainWindow(QMainWindow):
 
     def refresh_directory_summary(self):
         if not self.target_dir:
-            self.folder_title_label.setText("Kéo thả thư mục vào đây")
-            self.folder_path_label.setText("hoặc chọn từ máy tính của bạn")
+            self.folder_title_label.setText("Thả thư mục vào đây")
+            self.folder_path_label.setText("")
             self.folder_path_label.setToolTip("")
             self.file_count_label.setText("—")
             self.total_size_label.setText("—")
@@ -1578,6 +1690,36 @@ class MainWindow(QMainWindow):
 
     def save_date_setting(self, checked):
         self.config_manager.set_sort_by_date(bool(checked))
+
+    def update_preference_labels(self):
+        if self.current_theme == "dark":
+            self.theme_button.setText("☀  Sáng")
+            self.theme_button.setToolTip("Chuyển sang chế độ sáng")
+        else:
+            self.theme_button.setText("☾  Tối")
+            self.theme_button.setToolTip("Chuyển sang chế độ tối")
+        if get_language() == "en":
+            self.language_button.setText("VI")
+            self.language_button.setToolTip("Chuyển sang tiếng Việt")
+        else:
+            self.language_button.setText("EN")
+            self.language_button.setToolTip("Chuyển sang tiếng Anh")
+
+    def toggle_theme(self):
+        self.current_theme = "dark" if self.current_theme == "light" else "light"
+        self.config_manager.set_theme(self.current_theme)
+        app = QApplication.instance()
+        app.setProperty("theme", self.current_theme)
+        app.setStyleSheet(get_app_style(self.current_theme))
+        self.update_preference_labels()
+        self.update()
+
+    def toggle_language(self):
+        language = "vi" if get_language() == "en" else "en"
+        set_language(language)
+        self.config_manager.set_language(language)
+        retranslate_tree(self)
+        self.update_preference_labels()
 
     def select_directory(self):
         if self.is_busy:
@@ -1964,7 +2106,9 @@ def main():
     app.setOrganizationName("padduwcs")
     app.setStyle("Fusion")
     app.setFont(QFont("Segoe UI Variable Text", 10))
-    app.setStyleSheet(APP_STYLE)
+    qt_button_translator = StandardButtonTranslator()
+    app.installTranslator(qt_button_translator)
+    app._button_translator = qt_button_translator
 
     window = MainWindow()
     window.show()

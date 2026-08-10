@@ -27,7 +27,9 @@ DEFAULT_CONFIG = {
         "Archives": [".iso", ".dmg", ".torrent"],
         "Others": [".apk", ".bak", ".tmp"]
     },
-    "sort_by_date": False
+    "sort_by_date": False,
+    "theme": "light",
+    "language": "vi",
 }
 
 class ConfigManager:
@@ -60,4 +62,20 @@ class ConfigManager:
         
     def set_sort_by_date(self, enabled: bool):
         self.config["sort_by_date"] = enabled
+        self.save_config()
+
+    def get_theme(self):
+        theme = self.config.get("theme", DEFAULT_CONFIG["theme"])
+        return theme if theme in {"light", "dark"} else DEFAULT_CONFIG["theme"]
+
+    def set_theme(self, theme):
+        self.config["theme"] = theme if theme in {"light", "dark"} else "light"
+        self.save_config()
+
+    def get_language(self):
+        language = self.config.get("language", DEFAULT_CONFIG["language"])
+        return language if language in {"vi", "en"} else DEFAULT_CONFIG["language"]
+
+    def set_language(self, language):
+        self.config["language"] = language if language in {"vi", "en"} else "vi"
         self.save_config()

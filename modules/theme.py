@@ -2,17 +2,17 @@ from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QGraphicsDropShadowEffect
 
 
-APP_STYLE = """
+LIGHT_STYLE = """
     * {
         font-family: "Segoe UI Variable Text", "Segoe UI", sans-serif;
         outline: none;
     }
     QMainWindow, QWidget#AppRoot, QWidget#WindowBody, QScrollArea#MainScroll, QWidget#ScrollContent {
-        background-color: #f4f6fb;
+        background-color: #edf1f7;
         color: #171a28;
     }
     QWidget#AppRoot {
-        border: 1px solid #252a3b;
+        border: 1px solid #c8cfdd;
     }
 
     /* Custom title bar */
@@ -158,6 +158,27 @@ APP_STYLE = """
         font-weight: 650;
         padding: 3px 0;
     }
+    QFrame#PreferenceCard {
+        background-color: #181c2c;
+        border: 1px solid #292e43;
+        border-radius: 12px;
+    }
+    QPushButton#PreferenceButton {
+        min-height: 34px;
+        color: #d9dce7;
+        background-color: #23283a;
+        border: 1px solid #343a50;
+        border-radius: 8px;
+        padding: 0 10px;
+        text-align: left;
+        font-size: 10px;
+        font-weight: 700;
+    }
+    QPushButton#PreferenceButton:hover {
+        color: #ffffff;
+        background-color: #2d3349;
+        border-color: #4b5270;
+    }
 
     /* Top bar and hero */
     QLabel#PageEyebrow {
@@ -225,12 +246,12 @@ APP_STYLE = """
     }
     QLabel#HeroMetricValue {
         color: #ffffff;
-        font-size: 23px;
+        font-size: 20px;
         font-weight: 800;
     }
     QLabel#HeroMetricValueDark {
         color: #202512;
-        font-size: 23px;
+        font-size: 20px;
         font-weight: 800;
     }
     QLabel#HeroMetricLabel {
@@ -247,7 +268,7 @@ APP_STYLE = """
     /* Cards */
     QFrame#Card, QFrame#SourceCard, QFrame#ToolCard {
         background-color: #ffffff;
-        border: 1px solid #e5e8f0;
+        border: 1px solid #d8deea;
         border-radius: 17px;
     }
     QLabel#StepBadge {
@@ -299,8 +320,8 @@ APP_STYLE = """
         font-size: 10px;
     }
     QFrame#MiniStat {
-        background-color: #f7f8fb;
-        border: 1px solid #eceef4;
+        background-color: #f3f5f9;
+        border: 1px solid #dfe4ed;
         border-radius: 10px;
     }
     QLabel#MiniStatValue {
@@ -314,8 +335,8 @@ APP_STYLE = """
         font-weight: 650;
     }
     QFrame#OptionRow {
-        background-color: #f8f9fc;
-        border: 1px solid #e9ebf2;
+        background-color: #f3f5f9;
+        border: 1px solid #dce2ec;
         border-radius: 12px;
     }
     QLabel#OptionTitle {
@@ -706,10 +727,335 @@ APP_STYLE = """
 """
 
 
+MODERN_LIGHT_OVERRIDES = """
+    QMainWindow, QWidget#AppRoot, QWidget#WindowBody,
+    QScrollArea#MainScroll, QWidget#ScrollContent {
+        background-color: #f5f6fa;
+        color: #181b25;
+    }
+    QWidget#AppRoot { border-color: #dfe2ea; }
+
+    QFrame#TitleBar {
+        background-color: #ffffff;
+        border-bottom: 1px solid #e8eaf0;
+    }
+    QFrame#TitleBrandMark, QFrame#BrandMark, QFrame#FolderMark {
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #6558e8, stop:1 #8272f3);
+    }
+    QLabel#WindowTitle { color: #222531; }
+    QLabel#WindowTitleSeparator { color: #c7cad4; }
+    QLabel#WindowCaption { color: #8a8f9e; }
+    QPushButton#WindowControl, QPushButton#CloseControl { color: #656b78; }
+    QPushButton#WindowControl:hover { color: #262a35; background-color: #f0f1f5; }
+
+    QFrame#Sidebar {
+        background-color: #fbfbfd;
+        border-right: 1px solid #e6e8ee;
+    }
+    QLabel#BrandTitle { color: #20232d; }
+    QLabel#BrandCaption, QLabel#SidebarSection { color: #979baa; }
+    QPushButton#SidebarButton, QPushButton#SidebarActive, QPushButton#SidebarDanger {
+        min-height: 38px;
+        border-radius: 9px;
+        padding: 0 11px;
+    }
+    QPushButton#SidebarButton { color: #5f6471; background-color: transparent; }
+    QPushButton#SidebarButton:hover { color: #302b72; background-color: #f1f0ff; }
+    QPushButton#SidebarActive {
+        color: #5444cf;
+        background-color: #eeecff;
+        border: 1px solid #ded9ff;
+    }
+    QPushButton#SidebarDanger { color: #d45a65; background-color: transparent; }
+    QPushButton#SidebarDanger:hover { color: #b9424e; background-color: #fff0f1; }
+    QPushButton#SidebarButton:disabled, QPushButton#SidebarDanger:disabled {
+        color: #bec1ca; background-color: transparent;
+    }
+    QFrame#PreferenceCard {
+        background-color: #f1f2f6;
+        border: 1px solid #e2e4eb;
+        border-radius: 11px;
+    }
+    QPushButton#PreferenceButton {
+        min-height: 30px;
+        color: #555b68;
+        background-color: #ffffff;
+        border: 1px solid #e0e2e9;
+        border-radius: 7px;
+        padding: 0 8px;
+        text-align: center;
+        font-size: 10px;
+    }
+    QPushButton#PreferenceButton:hover {
+        color: #5848d5;
+        background-color: #f2f0ff;
+        border-color: #d4ceff;
+    }
+    QFrame#PrivacyCard {
+        background-color: #eefaf7;
+        border: 1px solid #d6eee8;
+        border-radius: 11px;
+    }
+    QLabel#PrivacyDot { color: #20a58f; }
+    QLabel#PrivacyTitle { color: #23665b; }
+    QLabel#PrivacyText { color: #689087; }
+    QLabel#VersionLabel { color: #a1a5b1; }
+
+    QLabel#PageEyebrow { color: #6757e7; }
+    QLabel#PageTitle { color: #1b1e28; font-size: 27px; }
+    QLabel#PageSubtitle { color: #777c89; }
+    QLabel#StatusPill {
+        color: #167b6c;
+        background-color: #e7f8f4;
+        border-color: #c9ece4;
+    }
+    QLabel#StatusPill[state="busy"] {
+        color: #5645cf; background-color: #efedff; border-color: #dcd7ff;
+    }
+    QLabel#StatusPill[state="warning"] {
+        color: #bd4f58; background-color: #fff0f1; border-color: #f5d5d8;
+    }
+
+    QFrame#HeroCard {
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #5146d8, stop:0.56 #6f5ee7, stop:1 #258f9e);
+        border-radius: 18px;
+    }
+    QLabel#HeroKicker { color: #d8d4ff; }
+    QLabel#HeroText { color: #e1e2ef; }
+    QFrame#HeroMetric {
+        background-color: rgba(255, 255, 255, 24);
+        border-color: rgba(255, 255, 255, 44);
+    }
+    QFrame#HeroMetricAccent { background-color: #72ead1; }
+    QLabel#HeroMetricLabelDark { color: #285b52; }
+    QLabel#HeroMetricValueDark { color: #123d36; }
+
+    QFrame#Card, QFrame#SourceCard, QFrame#ToolCard {
+        background-color: #ffffff;
+        border: 1px solid #e3e6ed;
+        border-radius: 15px;
+    }
+    QLabel#StepBadge { color: #5d4bd7; background-color: #efedff; }
+    QFrame#DropZone { background-color: #faf9ff; border-color: #b9b0f4; }
+    QFrame#DropZone:hover { background-color: #f3f1ff; border-color: #6d5de7; }
+    QFrame#DropZone[selected="true"] { background-color: #f0eeff; border-color: #6d5de7; }
+    QLabel#DropPath { color: #6656dc; }
+    QFrame#MiniStat, QFrame#OptionRow {
+        background-color: #f7f8fb;
+        border-color: #e6e8ef;
+    }
+    QLabel#OptionBadge { color: #ba5260; background-color: #fff0f2; }
+
+    QFrame#ActionDock {
+        background-color: #ffffff;
+        border: 1px solid #e2e5ec;
+        border-radius: 15px;
+    }
+    QLabel#ActionTitle { color: #222530; }
+    QLabel#ActionStatus, QLabel#PercentText { color: #5e4ddd; }
+    QProgressBar { background-color: #eceef3; }
+    QProgressBar::chunk {
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #6656e6, stop:1 #32b8a7);
+    }
+    QPushButton#PrimaryButton {
+        color: #ffffff;
+        background-color: #6252df;
+        border: 1px solid #6252df;
+    }
+    QPushButton#PrimaryButton:hover { background-color: #5545cf; border-color: #5545cf; }
+    QPushButton#PrimaryButton:pressed { background-color: #493abd; border-color: #493abd; }
+    QPushButton#PrimaryButton:disabled {
+        color: #a4a8b2; background-color: #eceef2; border-color: #e3e5ea;
+    }
+    QPushButton#DarkButton {
+        color: #535966;
+        background-color: #f7f8fa;
+        border: 1px solid #dfe2e9;
+    }
+    QPushButton#DarkButton:hover {
+        color: #5142c8; background-color: #efedff; border-color: #d2ccff;
+    }
+    QPushButton#DarkButton:disabled {
+        color: #b7bac3; background-color: #f5f6f8; border-color: #e9ebef;
+    }
+"""
+
+
+DARK_OVERRIDES = """
+    QMainWindow, QWidget#AppRoot, QWidget#WindowBody, QScrollArea#MainScroll, QWidget#ScrollContent {
+        background-color: #0f121b;
+        color: #eef1f7;
+    }
+    QWidget#AppRoot { border-color: #343a4b; }
+    QToolTip { color: #f8f9fc; background-color: #252a39; border-color: #464d61; }
+
+    QLabel#PageTitle { color: #f5f7fb; }
+    QLabel#PageSubtitle { color: #aeb5c5; }
+    QLabel#PageEyebrow { color: #a998ff; }
+    QLabel#StatusPill {
+        color: #d9ff86; background-color: #243019; border-color: #435d24;
+    }
+    QLabel#StatusPill[state="busy"] {
+        color: #c8bdff; background-color: #292442; border-color: #4a4172;
+    }
+    QLabel#StatusPill[state="warning"] {
+        color: #ffb4a8; background-color: #3b2524; border-color: #68403b;
+    }
+
+    QFrame#Card, QFrame#SourceCard, QFrame#ToolCard {
+        background-color: #191d28; border-color: #303646;
+    }
+    QLabel#StepBadge { color: #c1b5ff; background-color: #302a4b; }
+    QLabel#CardTitle, QLabel#DropTitle, QLabel#MiniStatValue,
+    QLabel#OptionTitle { color: #f0f2f7; }
+    QLabel#CardText, QLabel#MutedText, QLabel#MiniStatLabel,
+    QLabel#OptionText { color: #a7adbc; }
+    QFrame#DropZone { background-color: #222232; border-color: #7569b9; }
+    QFrame#DropZone:hover { background-color: #29263d; border-color: #a391ff; }
+    QFrame#DropZone[selected="true"] { background-color: #2c2844; border-color: #a391ff; }
+    QLabel#DropPath { color: #b6a8ff; }
+    QFrame#MiniStat, QFrame#OptionRow { background-color: #222631; border-color: #353b49; }
+    QLabel#OptionBadge { color: #ffc0b2; background-color: #432925; }
+
+    QPushButton#SecondaryButton, QPushButton#DialogButton,
+    QPushButton#GhostDanger, QPushButton#MessageSecondary {
+        color: #e4e7ee; background-color: #252a36; border-color: #414858;
+    }
+    QPushButton#SecondaryButton:hover, QPushButton#DialogButton:hover,
+    QPushButton#MessageSecondary:hover {
+        color: #ffffff; background-color: #302b49; border-color: #7769b7;
+    }
+    QPushButton#SecondaryButton:disabled {
+        color: #686e7d; background-color: #1c202a; border-color: #2c313d;
+    }
+    QPushButton#GhostDanger { color: #ffaaa7; border-color: #60403f; }
+    QPushButton#GhostDanger:hover { background-color: #3c2527; }
+    QPushButton#LinkButton { color: #c6bbff; background-color: #302b49; border-color: #4a426c; }
+    QPushButton#LinkButton:hover { color: #ffffff; background-color: #3a3457; }
+
+    QDialog, QMessageBox { background-color: #11151f; color: #eef1f7; }
+    QDialog#AppMessageDialog { background-color: transparent; }
+    QFrame#MessageCard { background-color: #1b1f2b; border-color: #373d4c; }
+    QFrame#MessageCard[variant="danger"] { border-color: #64403e; }
+    QFrame#MessageCard[variant="success"] { border-color: #485c31; }
+    QFrame#MessageIcon { background-color: #302a4b; border-color: #4a4170; }
+    QFrame#MessageIcon[variant="danger"] { background-color: #402625; border-color: #653e3b; }
+    QFrame#MessageIcon[variant="success"] { background-color: #29351d; border-color: #475d2d; }
+    QLabel#MessageIconText, QLabel#MessageKicker, QLabel#DialogEyebrow { color: #b9abff; }
+    QLabel#MessageIconText[variant="danger"], QLabel#MessageKicker[variant="danger"] { color: #ffaaa5; }
+    QLabel#MessageIconText[variant="success"], QLabel#MessageKicker[variant="success"] { color: #c9f36a; }
+    QLabel#MessageTitle, QLabel#DialogTitle { color: #f5f7fb; }
+    QLabel#MessageText, QLabel#DialogSubtitle { color: #adb3c2; }
+    QFrame#MessageDivider { background-color: #343947; }
+    QPushButton#MessageClose { color: #a8adbb; }
+    QPushButton#MessageClose:hover { color: #ffffff; background-color: #292e3a; }
+
+    QFrame#UpdateSummary { background-color: #2b2742; border-color: #49416b; }
+    QLabel#UpdateVersionMuted { color: #acb1c0; }
+    QLabel#UpdateArrow { color: #aa9cff; }
+    QLabel#UpdateVersionNew { color: #c2b7ff; }
+    QLabel#UpdateHint { color: #b8bdc9; background-color: #20242e; border-color: #353b48; }
+    QTextBrowser#ReleaseNotes, QLineEdit, QTableWidget, QGroupBox {
+        color: #e3e6ed; background-color: #1b1f29; border-color: #373d4a;
+    }
+    QTextBrowser#ReleaseNotes, QLineEdit, QTableWidget {
+        selection-background-color: #4a3e78; selection-color: #ffffff;
+    }
+    QLineEdit:focus { border: 2px solid #9b89ff; }
+    QTableWidget { alternate-background-color: #202530; gridline-color: #303642; }
+    QHeaderView::section {
+        color: #b9beca; background-color: #252a35; border-bottom-color: #3a404d;
+    }
+    QRadioButton { color: #d5d9e2; }
+    QRadioButton::indicator { background-color: #242934; border-color: #707789; }
+    QRadioButton::indicator:checked { background-color: #8c78f4; border-color: #322b51; }
+    QRadioButton:checked { color: #ffffff; }
+    QScrollBar::handle:vertical { background-color: #505666; }
+    QScrollBar::handle:vertical:hover { background-color: #6b7284; }
+    QGroupBox::title { color: #c0b4ff; background-color: #302b49; }
+    QMessageBox QLabel { color: #e7eaf1; }
+    QMessageBox QPushButton { color: #e4e7ee; background-color: #252a36; border-color: #414858; }
+    QMessageBox QPushButton:hover { color: #ffffff; background-color: #302b49; border-color: #7769b7; }
+
+    QFrame#TitleBar {
+        background-color: #151820;
+        border-bottom: 1px solid #292e39;
+    }
+    QLabel#WindowTitle { color: #f1f3f7; }
+    QLabel#WindowTitleSeparator { color: #484e5c; }
+    QLabel#WindowCaption { color: #858b99; }
+    QPushButton#WindowControl, QPushButton#CloseControl { color: #a8adba; }
+    QPushButton#WindowControl:hover { color: #ffffff; background-color: #292e39; }
+
+    QFrame#Sidebar {
+        background-color: #171a22;
+        border-right: 1px solid #292e39;
+    }
+    QLabel#BrandTitle { color: #f2f4f8; }
+    QLabel#BrandCaption, QLabel#SidebarSection { color: #747b8c; }
+    QPushButton#SidebarButton { color: #aeb3c0; background-color: transparent; }
+    QPushButton#SidebarButton:hover { color: #ffffff; background-color: #252836; }
+    QPushButton#SidebarActive {
+        color: #d8d2ff; background-color: #2c2944; border-color: #423d61;
+    }
+    QPushButton#SidebarDanger { color: #f09299; background-color: transparent; }
+    QPushButton#SidebarDanger:hover { color: #ffb4ba; background-color: #342326; }
+    QPushButton#SidebarButton:disabled, QPushButton#SidebarDanger:disabled {
+        color: #555b68; background-color: transparent;
+    }
+    QFrame#PreferenceCard {
+        background-color: #20242e; border-color: #303641;
+    }
+    QPushButton#PreferenceButton {
+        color: #c8ccd5; background-color: #292e39; border-color: #383e4b;
+    }
+    QPushButton#PreferenceButton:hover {
+        color: #ffffff; background-color: #35304e; border-color: #554d79;
+    }
+    QFrame#PrivacyCard { background-color: #1c2b2a; border-color: #29413e; }
+    QLabel#PrivacyDot { color: #55d4bd; }
+    QLabel#PrivacyTitle { color: #b8e9df; }
+    QLabel#PrivacyText { color: #779e97; }
+    QLabel#VersionLabel { color: #666d7c; }
+
+    QLabel#StatusPill {
+        color: #7ce5d1; background-color: #19302d; border-color: #2c514b;
+    }
+    QFrame#HeroMetricAccent { background-color: #62dbc4; }
+    QFrame#ActionDock { background-color: #1b1f29; border-color: #303642; }
+    QLabel#ActionTitle { color: #f2f4f8; }
+    QLabel#ActionStatus, QLabel#PercentText { color: #8f80f4; }
+    QProgressBar { background-color: #303541; }
+    QPushButton#DarkButton {
+        color: #e2e5eb; background-color: #252a35; border-color: #3b424f;
+    }
+    QPushButton#DarkButton:hover {
+        color: #ffffff; background-color: #312d49; border-color: #5c527f;
+    }
+    QPushButton#DarkButton:disabled {
+        color: #606674; background-color: #20242d; border-color: #2c313c;
+    }
+    QPushButton#PrimaryButton:disabled {
+        color: #686e7a; background-color: #292e38; border-color: #303641;
+    }
+"""
+
+
+APP_STYLE = LIGHT_STYLE + MODERN_LIGHT_OVERRIDES
+
+
+def get_app_style(theme="light"):
+    style = LIGHT_STYLE + MODERN_LIGHT_OVERRIDES
+    return style + (DARK_OVERRIDES if theme == "dark" else "")
+
+
 def add_shadow(widget, blur_radius=34, y_offset=9, opacity=32):
     shadow = QGraphicsDropShadowEffect(widget)
     shadow.setBlurRadius(blur_radius)
     shadow.setOffset(0, y_offset)
-    shadow.setColor(QColor(21, 24, 40, opacity))
+    shadow.setColor(QColor(22, 25, 38, opacity))
     widget.setGraphicsEffect(shadow)
     return shadow

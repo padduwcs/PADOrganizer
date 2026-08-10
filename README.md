@@ -15,6 +15,7 @@
 - Hoàn tác lần sắp xếp gần nhất trong phiên đang mở.
 - Giữ tệp cần dọn trong thùng rác nội bộ trước khi xóa vĩnh viễn.
 - Chủ động kiểm tra, tải và xác minh phiên bản mới từ GitHub khi bạn yêu cầu.
+- Chuyển đổi tức thời giữa giao diện sáng/tối và ngôn ngữ Tiếng Việt/English.
 
 Mọi thao tác với tệp đều diễn ra cục bộ. PADOrganizer không tải tệp hoặc dữ liệu cá nhân của bạn lên mạng; ứng dụng chỉ kết nối GitHub khi bạn bấm **Kiểm tra cập nhật**.
 
@@ -31,7 +32,7 @@ Bạn không cần cài Python hay thư viện bổ sung. Nếu không muốn c�
 
 ## Bắt đầu sử dụng
 
-1. Kéo thả thư mục vào ứng dụng hoặc chọn **Chọn thư mục**.
+1. Kéo thả thư mục vào ứng dụng hoặc chọn **Duyệt...**.
 2. Bật **Chia theo Năm–Tháng** hoặc mở **Quy tắc phân loại** nếu muốn tùy chỉnh.
 3. Chọn **Tổ chức ngay** và theo dõi kết quả trên màn hình.
 4. Dùng **Hoàn tác** nếu muốn khôi phục lần sắp xếp vừa thực hiện.
