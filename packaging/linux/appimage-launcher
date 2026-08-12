@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+
+if [ -z "${APPDIR:-}" ]; then
+    echo "APPDIR is not set; launch the PADOrganizer AppImage instead." >&2
+    exit 1
+fi
+
+exec "$APPDIR/usr/lib/padorganizer/PADOrganizer" "$@"

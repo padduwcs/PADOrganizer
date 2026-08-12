@@ -19,7 +19,9 @@
 
 Mọi thao tác với tệp đều diễn ra cục bộ. PADOrganizer không tải tệp hoặc dữ liệu cá nhân của bạn lên mạng; ứng dụng chỉ kết nối GitHub khi bạn bấm **Kiểm tra cập nhật**.
 
-## Cài đặt trên Windows
+## Tải và cài đặt
+
+### Windows
 
 1. Mở trang [Releases](https://github.com/padduwcs/PADOrganizer/releases/latest).
 2. Tải `PADOrganizer-Setup-vX.Y.Z.exe` trong phần **Assets**.
@@ -29,6 +31,37 @@ Mọi thao tác với tệp đều diễn ra cục bộ. PADOrganizer không t�
 Bạn không cần cài Python hay thư viện bổ sung. Nếu không muốn cài đặt, hãy tải bản `PADOrganizer-portable-vX.Y.Z.exe` và đặt nó trong một thư mục riêng trước khi chạy.
 
 > Windows SmartScreen có thể cảnh báo vì ứng dụng hiện chưa có chữ ký số. Chỉ tiếp tục khi tệp được tải từ repository chính thức này; bạn có thể đối chiếu với `SHA256SUMS.txt` trong cùng bản phát hành.
+
+### Ubuntu, Debian và các bản phân phối tương thích
+
+1. Tải `padorganizer_X.Y.Z_amd64.deb` từ trang [Releases](https://github.com/padduwcs/PADOrganizer/releases/latest).
+2. Mở tệp bằng trình cài đặt phần mềm và chọn **Cài đặt**.
+3. Mở PADOrganizer từ menu ứng dụng.
+
+Nếu trình cài đặt đồ họa không nhận tệp, mở Terminal tại thư mục tải xuống và chạy:
+
+```bash
+sudo apt install ./padorganizer_X.Y.Z_amd64.deb
+```
+
+Gỡ ứng dụng bằng trình quản lý phần mềm hoặc `sudo apt remove padorganizer`.
+
+### Các bản phân phối Linux khác
+
+Tải `PADOrganizer-vX.Y.Z-x86_64.AppImage`, cho phép tệp được thực thi trong phần **Thuộc tính → Quyền**, sau đó nhấp đúp để chạy. Có thể thực hiện tương đương trong Terminal:
+
+```bash
+chmod +x PADOrganizer-vX.Y.Z-x86_64.AppImage
+./PADOrganizer-vX.Y.Z-x86_64.AppImage
+```
+
+Nếu hệ thống không có FUSE, dùng chế độ dự phòng:
+
+```bash
+./PADOrganizer-vX.Y.Z-x86_64.AppImage --appimage-extract-and-run
+```
+
+Các gói Linux hiện hỗ trợ máy Intel/AMD 64-bit (`x86_64`/`amd64`). Không cần cài Python hoặc PyQt6.
 
 ## Bắt đầu sử dụng
 
@@ -43,20 +76,30 @@ Bạn không cần cài Python hay thư viện bổ sung. Nếu không muốn c�
 
 Chọn **Kiểm tra cập nhật** trong mục **Bảo trì**. PADOrganizer không tự kiểm tra trong nền.
 
-- Bản cài đặt: ứng dụng có thể tải Installer, xác minh SHA-256 và hỏi lại trước khi mở trình cài đặt.
-- Bản portable hoặc chạy từ mã nguồn: ứng dụng mở trang Release để bạn chọn file phù hợp.
+- Bản cài đặt Windows: ứng dụng có thể tải Installer, xác minh SHA-256 và hỏi lại trước khi mở trình cài đặt.
+- Windows portable, Linux hoặc chạy từ mã nguồn: ứng dụng mở trang Release để bạn chọn gói phù hợp. Trên Linux, hãy cài đè tệp `.deb` mới hoặc thay AppImage cũ.
 
 Quá trình cập nhật giữ nguyên quy tắc, nhật ký và các tệp trong thùng rác nội bộ.
 
 ## Dữ liệu và quyền riêng tư
 
-PADOrganizer lưu dữ liệu ngay trên thiết bị:
+PADOrganizer lưu dữ liệu ngay trên thiết bị. Trên Windows, các mục sau nằm cạnh tệp chương trình:
 
 - `config.json`: quy tắc và tùy chọn của bạn.
 - `logs/`: nhật ký hoạt động; có thể xóa từ mục **Bảo trì**.
 - `PADOrganizer_Trash/`: các tệp đã chuyển vào thùng rác nội bộ.
 
-Cài bản mới vào cùng vị trí sẽ giữ nguyên các dữ liệu này. Khi gỡ ứng dụng từ **Windows Settings → Apps**, dữ liệu cá nhân không bị tự động xóa; nếu muốn dọn hoàn toàn, hãy xóa thư mục `%LOCALAPPDATA%\Programs\PADOrganizer` sau khi gỡ cài đặt.
+Cài bản Windows mới vào cùng vị trí sẽ giữ nguyên các dữ liệu này. Khi gỡ ứng dụng từ **Windows Settings → Apps**, dữ liệu cá nhân không bị tự động xóa; nếu muốn dọn hoàn toàn, hãy xóa thư mục `%LOCALAPPDATA%\Programs\PADOrganizer` sau khi gỡ cài đặt.
+
+Trên Linux, dữ liệu tuân theo chuẩn XDG:
+
+| Nội dung | Vị trí mặc định |
+|---|---|
+| Cấu hình | `~/.config/PADOrganizer/config.json` |
+| Nhật ký | `~/.local/state/PADOrganizer/logs/` |
+| Thùng rác nội bộ | `~/.local/share/PADOrganizer/PADOrganizer_Trash/` |
+
+Các biến `XDG_CONFIG_HOME`, `XDG_STATE_HOME` và `XDG_DATA_HOME` được tôn trọng nếu hệ thống đã thiết lập. Cập nhật hoặc gỡ gói `.deb` không tự động xóa dữ liệu cá nhân này.
 
 ## Phím tắt
 

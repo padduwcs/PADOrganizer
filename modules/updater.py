@@ -34,10 +34,10 @@ class ReleaseInfo:
     version: str
     notes: str
     page_url: str
-    installer_name: str
-    installer_url: str
-    installer_size: int
-    installer_sha256: str
+    asset_name: str = ""
+    asset_url: str = ""
+    asset_size: int = 0
+    asset_sha256: str = ""
 
 
 def parse_version(value):
@@ -52,10 +52,19 @@ def is_newer_version(candidate, current=APP_VERSION):
 
 
 def is_installed_build():
-    if not getattr(sys, "frozen", False):
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
         return False
     base_dir = Path(sys.executable).resolve().parent
     return (base_dir / INSTALL_MARKER).is_file() or any(base_dir.glob("unins*.exe"))
+
+
+def release_asset_name(version, platform_name=None):
+    platform_name = platform_name or sys.platform
+    if platform_name == "win32":
+        return f"PADOrganizer-Setup-v{version}.exe"
+    if platform_name.startswith("linux"):
+        return f"PADOrganizer-v{version}-x86_64.AppImage"
+    return ""
 
 
 def _request(url):
@@ -98,19 +107,19 @@ def _read_url(url, opener, timeout=REQUEST_TIMEOUT):
         raise _friendly_network_error(exc) from exc
 
 
-def _checksum_from_manifest(content, installer_name):
+def _checksum_from_manifest(content, asset_name):
     for raw_line in content.decode("utf-8-sig", errors="replace").splitlines():
         parts = raw_line.strip().split(None, 1)
         if len(parts) != 2:
             continue
         digest, filename = parts
         filename = filename.lstrip("*").strip()
-        if filename == installer_name and re.fullmatch(r"[0-9a-fA-F]{64}", digest):
+        if filename == asset_name and re.fullmatch(r"[0-9a-fA-F]{64}", digest):
             return digest.lower()
     return ""
 
 
-def fetch_latest_release(opener=None, timeout=REQUEST_TIMEOUT):
+def fetch_latest_release(opener=None, timeout=REQUEST_TIMEOUT, platform_name=None):
     opener = opener or urlopen
     try:
         payload = json.loads(_read_url(LATEST_RELEASE_API, opener, timeout).decode("utf-8"))
@@ -124,32 +133,35 @@ def fetch_latest_release(opener=None, timeout=REQUEST_TIMEOUT):
         raise UpdateError("Bản phát hành mới nhất không có số phiên bản hợp lệ.") from exc
 
     version = tag_name.lstrip("v")
-    installer_name = f"PADOrganizer-Setup-v{version}.exe"
+    platform_name = platform_name or sys.platform
+    asset_name = release_asset_name(version, platform_name)
     assets = payload.get("assets") or []
-    installer = next((asset for asset in assets if asset.get("name") == installer_name), None)
-    if installer is None:
+    asset = next((item for item in assets if item.get("name") == asset_name), None)
+    if platform_name == "win32" and asset is None:
         raise UpdateError(f"Bản phát hành v{version} chưa có file Installer phù hợp.")
 
-    installer_url = _validate_github_url(installer.get("browser_download_url", ""))
-    digest_value = str(installer.get("digest") or "")
-    installer_sha256 = ""
-    if digest_value.lower().startswith("sha256:"):
-        candidate = digest_value.split(":", 1)[1]
-        if re.fullmatch(r"[0-9a-fA-F]{64}", candidate):
-            installer_sha256 = candidate.lower()
+    asset_url = ""
+    asset_sha256 = ""
+    if asset is not None:
+        asset_url = _validate_github_url(asset.get("browser_download_url", ""))
+        digest_value = str(asset.get("digest") or "")
+        if digest_value.lower().startswith("sha256:"):
+            candidate = digest_value.split(":", 1)[1]
+            if re.fullmatch(r"[0-9a-fA-F]{64}", candidate):
+                asset_sha256 = candidate.lower()
 
-    if not installer_sha256:
+    if platform_name == "win32" and asset is not None and not asset_sha256:
         checksum_asset = next(
-            (asset for asset in assets if asset.get("name") == "SHA256SUMS.txt"),
+            (item for item in assets if item.get("name") == "SHA256SUMS.txt"),
             None,
         )
         if checksum_asset is not None:
             checksum_url = _validate_github_url(checksum_asset.get("browser_download_url", ""))
-            installer_sha256 = _checksum_from_manifest(
-                _read_url(checksum_url, opener, timeout), installer_name
+            asset_sha256 = _checksum_from_manifest(
+                _read_url(checksum_url, opener, timeout), asset_name
             )
 
-    if not installer_sha256:
+    if platform_name == "win32" and not asset_sha256:
         raise UpdateError("Không tìm thấy mã SHA-256 để xác minh Installer.")
 
     page_url = _validate_github_url(payload.get("html_url", RELEASES_URL))
@@ -157,10 +169,10 @@ def fetch_latest_release(opener=None, timeout=REQUEST_TIMEOUT):
         version=version,
         notes=str(payload.get("body") or "Không có ghi chú cho phiên bản này."),
         page_url=page_url,
-        installer_name=installer_name,
-        installer_url=installer_url,
-        installer_size=int(installer.get("size") or 0),
-        installer_sha256=installer_sha256,
+        asset_name=asset_name if asset is not None else "",
+        asset_url=asset_url,
+        asset_size=int(asset.get("size") or 0) if asset is not None else 0,
+        asset_sha256=asset_sha256,
     )
 
 
@@ -175,19 +187,21 @@ def _clean_old_downloads(update_dir, keep_name):
                 pass
 
 
-def download_installer(release, progress_callback=None, opener=None, destination_dir=None):
+def download_release_asset(release, progress_callback=None, opener=None, destination_dir=None):
+    if not release.asset_name or not release.asset_url or not release.asset_sha256:
+        raise UpdateError("Bản phát hành không có gói cập nhật có thể tải an toàn.")
     opener = opener or urlopen
     update_dir = Path(destination_dir or Path(tempfile.gettempdir()) / "PADOrganizer" / "updates")
     update_dir.mkdir(parents=True, exist_ok=True)
-    destination = update_dir / release.installer_name
+    destination = update_dir / release.asset_name
     partial = destination.with_suffix(destination.suffix + ".part")
     _clean_old_downloads(update_dir, destination.name)
 
     hasher = hashlib.sha256()
     downloaded = 0
     try:
-        with opener(_request(release.installer_url), timeout=REQUEST_TIMEOUT) as response:
-            total = int(response.headers.get("Content-Length") or release.installer_size or 0)
+        with opener(_request(release.asset_url), timeout=REQUEST_TIMEOUT) as response:
+            total = int(response.headers.get("Content-Length") or release.asset_size or 0)
             with open(partial, "wb") as output:
                 while True:
                     chunk = response.read(1024 * 256)
@@ -212,7 +226,7 @@ def download_installer(release, progress_callback=None, opener=None, destination
         raise UpdateError("Không thể lưu Installer vào thư mục tạm của Windows.") from exc
 
     actual_sha256 = hasher.hexdigest().lower()
-    if actual_sha256 != release.installer_sha256.lower():
+    if actual_sha256 != release.asset_sha256.lower():
         try:
             partial.unlink()
         except OSError:
