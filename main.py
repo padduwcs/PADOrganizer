@@ -10,6 +10,7 @@ from PyQt6.QtCore import (
     QRectF,
     Qt,
     QThread,
+    QTimer,
     QUrl,
     pyqtProperty,
     pyqtSignal,
@@ -55,7 +56,7 @@ from PyQt6.QtWidgets import (
 )
 
 from modules import ConfigManager, Deduplicator, FileMover, PADLogger
-from modules.config_manager import BASE_DIR, DEFAULT_CONFIG, PAD_TRASH_DIR
+from modules.config_manager import DEFAULT_CONFIG, PAD_TRASH_DIR
 from modules.i18n import (
     LocalizedDialog as QDialog,
     LocalizedFileDialog as QFileDialog,
@@ -73,10 +74,17 @@ from modules.i18n import (
     set_language,
     translate,
 )
+from modules.platform_paths import (
+    APPLICATION_DIR,
+    CONFIG_DIR,
+    DATA_DIR,
+    RESOURCE_DIR,
+    STATE_DIR,
+)
 from modules.theme import get_app_style, add_shadow
 from modules.updater import (
     UpdateError,
-    download_installer,
+    download_release_asset,
     fetch_latest_release,
     is_installed_build,
     is_newer_version,
@@ -87,15 +95,14 @@ from version import APP_VERSION
 
 APP_NAME = "PADOrganizer"
 APP_FULL_NAME = "PADOrganizer: Personal Archive Directory Organizer"
+PROTECTED_DIRECTORIES = {
+    path.resolve() for path in {APPLICATION_DIR, CONFIG_DIR, DATA_DIR, STATE_DIR}
+}
 
 
 def get_resource_path(relative_path):
     """Return an absolute resource path in development and PyInstaller builds."""
-    try:
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
+    return str(RESOURCE_DIR / relative_path)
 
 
 def format_bytes(size):
@@ -296,7 +303,7 @@ class UpdateDownloadThread(QThread):
 
     def run(self):
         try:
-            path = download_installer(
+            path = download_release_asset(
                 self.release,
                 lambda current, total: self.progress.emit(current, total),
             )
@@ -477,6 +484,11 @@ class UpdateDialog(QDialog):
                 "Ứng dụng chỉ đóng sau khi bạn xác nhận cài đặt."
             )
             action_text = "Tải và cập nhật"
+        elif sys.platform.startswith("linux"):
+            hint_text = (
+                "Trên Linux, trang Release sẽ được mở để bạn chọn gói DEB hoặc AppImage phù hợp."
+            )
+            action_text = "Mở trang tải xuống"
         else:
             hint_text = (
                 "Bạn đang dùng bản portable hoặc chạy từ mã nguồn. "
@@ -1060,7 +1072,8 @@ class MainWindow(QMainWindow):
         self.resize(1220, 820)
         self.setAcceptDrops(True)
 
-        icon_path = get_resource_path("logo.ico")
+        icon_name = "logo.ico" if sys.platform == "win32" else "assets/padorganizer.png"
+        icon_path = get_resource_path(icon_name)
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
 
@@ -1137,7 +1150,7 @@ class MainWindow(QMainWindow):
         self.btn_open_trash = QPushButton("Mở thùng rác")
         self.btn_open_trash.setObjectName("SidebarButton")
         self.btn_open_trash.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_open_trash.setToolTip("Mở PADOrganizer_Trash trong File Explorer")
+        self.btn_open_trash.setToolTip("Mở PADOrganizer_Trash trong trình quản lý tệp")
         self.btn_open_trash.clicked.connect(self.open_trash)
         side_layout.addWidget(self.btn_open_trash)
 
@@ -1354,7 +1367,7 @@ class MainWindow(QMainWindow):
         drop_copy.setSpacing(2)
         self.folder_title_label = QLabel("Thả thư mục vào đây")
         self.folder_title_label.setObjectName("DropTitle")
-        self.folder_title_label.setToolTip("Kéo một thư mục từ File Explorer và thả vào khu vực này.")
+        self.folder_title_label.setToolTip("Kéo một thư mục từ trình quản lý tệp và thả vào khu vực này.")
         self.folder_path_label = QLabel("")
         self.folder_path_label.setObjectName("DropPath")
         self.folder_path_label.setWordWrap(True)
@@ -1623,7 +1636,7 @@ class MainWindow(QMainWindow):
         if not path.is_dir():
             QMessageBox.warning(self, "Thư mục không hợp lệ", "Không thể truy cập thư mục đã chọn.")
             return
-        if path == BASE_DIR.resolve():
+        if path in PROTECTED_DIRECTORIES:
             QMessageBox.warning(
                 self,
                 "Không thể chọn thư mục ứng dụng",
@@ -1750,14 +1763,12 @@ class MainWindow(QMainWindow):
 
     def open_trash(self):
         PAD_TRASH_DIR.mkdir(parents=True, exist_ok=True)
-        try:
-            os.startfile(str(PAD_TRASH_DIR))
-        except AttributeError:
-            import subprocess
-
-            subprocess.call(["explorer", str(PAD_TRASH_DIR)])
-        except OSError as exc:
-            QMessageBox.critical(self, "Không thể mở thùng rác", str(exc))
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(PAD_TRASH_DIR))):
+            QMessageBox.critical(
+                self,
+                "Không thể mở thùng rác",
+                "Hệ thống không thể mở thư mục PADOrganizer_Trash.",
+            )
 
     def open_settings(self):
         if self.is_busy:
@@ -2105,13 +2116,20 @@ def main():
     app.setApplicationDisplayName(APP_FULL_NAME)
     app.setOrganizationName("padduwcs")
     app.setStyle("Fusion")
-    app.setFont(QFont("Segoe UI Variable Text", 10))
+    if sys.platform == "win32":
+        app.setFont(QFont("Segoe UI Variable Text", 10))
+    else:
+        application_font = app.font()
+        application_font.setPointSize(10)
+        app.setFont(application_font)
     qt_button_translator = StandardButtonTranslator()
     app.installTranslator(qt_button_translator)
     app._button_translator = qt_button_translator
 
     window = MainWindow()
     window.show()
+    if "--smoke-test" in sys.argv:
+        QTimer.singleShot(750, app.quit)
     sys.exit(app.exec())
 
 

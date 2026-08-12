@@ -8,9 +8,10 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFontMetrics
 from PyQt6.QtWidgets import QApplication, QLabel, QPushButton, QScrollArea
 
-from main import AppMessageDialog, FittedLabel, MainWindow, UpdateCheckThread
+from main import AppMessageDialog, FittedLabel, MainWindow, UpdateCheckThread, UpdateDialog
 from modules.config_manager import ConfigManager
 from modules.i18n import get_language, set_language
+from modules.updater import ReleaseInfo
 from version import APP_VERSION
 
 
@@ -33,6 +34,21 @@ class UpdateUiTests(unittest.TestCase):
             start.assert_called_once()
             window.is_busy = False
             window.close()
+
+    def test_linux_update_dialog_opens_release_page(self):
+        release = ReleaseInfo(
+            version="9.9.9",
+            notes="Release notes",
+            page_url="https://github.com/padduwcs/PADOrganizer/releases/tag/v9.9.9",
+        )
+        with patch("main.sys.platform", "linux"):
+            dialog = UpdateDialog(release, installed_build=False)
+
+        labels = [label.text() for label in dialog.findChildren(QLabel)]
+        buttons = [button.text() for button in dialog.findChildren(QPushButton)]
+        self.assertTrue(any("DEB" in text and "AppImage" in text for text in labels))
+        self.assertIn("Mở trang tải xuống", buttons)
+        dialog.close()
 
     def test_custom_message_dialog_uses_localized_actions(self):
         dialog = AppMessageDialog(

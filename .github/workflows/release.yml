@@ -1,4 +1,4 @@
-name: Build Windows release
+name: Build cross-platform release
 
 on:
   push:
@@ -7,14 +7,50 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version, for example 1.0.0"
+        description: "Release version, for example 1.3.0"
         required: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  prepare:
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve and validate release version
+        id: version
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            version="$INPUT_VERSION"
+          else
+            version="$REF_NAME"
+            version="${version#v}"
+          fi
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version: $version" >&2
+            exit 1
+          fi
+          python scripts/check_version.py "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
   build-windows:
+    needs: prepare
     runs-on: windows-latest
 
     steps:
@@ -27,43 +63,147 @@ jobs:
           python-version: "3.12"
           cache: "pip"
 
+      - name: Install test dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Run Windows tests
+        shell: powershell
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          python -m unittest discover -s tests -v
+
       - name: Install Inno Setup
         shell: powershell
         run: choco install innosetup --yes --no-progress
 
-      - name: Resolve release version
-        id: version
-        shell: powershell
-        run: |
-          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            $version = "${{ inputs.version }}"
-          } else {
-            $version = "${{ github.ref_name }}" -replace '^v', ''
-          }
-          if ($version -notmatch '^\d+\.\d+\.\d+$') {
-            throw "Invalid version: $version"
-          }
-          "version=$version" >> $env:GITHUB_OUTPUT
-
       - name: Build portable app and installer
         shell: cmd
-        run: build_release.bat ${{ steps.version.outputs.version }}
+        run: build_release.bat ${{ needs.prepare.outputs.version }}
 
-      - name: Upload build artifacts
+      - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: PADOrganizer-${{ steps.version.outputs.version }}-windows
-          path: release/*
+          name: PADOrganizer-${{ needs.prepare.outputs.version }}-windows
+          path: |
+            release/PADOrganizer-Setup-v${{ needs.prepare.outputs.version }}.exe
+            release/PADOrganizer-portable-v${{ needs.prepare.outputs.version }}.exe
           if-no-files-found: error
 
+  build-linux:
+    needs: prepare
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Linux build and runtime dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            desktop-file-utils \
+            libdbus-1-3 \
+            libegl1 \
+            libfontconfig1 \
+            libgl1 \
+            libx11-xcb1 \
+            libxkbcommon-x11-0 \
+            libxcb-cursor0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-randr0 \
+            libxcb-render-util0 \
+            libxcb-xinerama0 \
+            libxcb-xkb1 \
+            xvfb
+          python -m pip install -r requirements-dev.txt
+
+      - name: Run Linux tests
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m unittest discover -s tests -v
+
+      - name: Download appimagetool
+        shell: bash
+        run: |
+          mkdir -p build-tools
+          curl --fail --location --retry 3 \
+            --output build-tools/appimagetool-x86_64.AppImage \
+            https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          chmod +x build-tools/appimagetool-x86_64.AppImage
+
+      - name: Build DEB and AppImage
+        shell: bash
+        env:
+          APPIMAGETOOL: ${{ github.workspace }}/build-tools/appimagetool-x86_64.AppImage
+        run: bash scripts/build_linux.sh "${{ needs.prepare.outputs.version }}"
+
+      - name: Validate desktop integration metadata
+        shell: bash
+        run: desktop-file-validate packaging/linux/padorganizer.desktop
+
+      - name: Smoke test PyInstaller bundle and AppImage
+        shell: bash
+        run: |
+          xvfb-run -a dist/PADOrganizer/PADOrganizer --smoke-test
+          xvfb-run -a \
+            "release/PADOrganizer-v${{ needs.prepare.outputs.version }}-x86_64.AppImage" \
+            --appimage-extract-and-run --smoke-test
+
+      - name: Install and smoke test DEB package
+        shell: bash
+        run: |
+          dpkg-deb --info "release/padorganizer_${{ needs.prepare.outputs.version }}_amd64.deb"
+          sudo apt-get install --yes "./release/padorganizer_${{ needs.prepare.outputs.version }}_amd64.deb"
+          xvfb-run -a /usr/bin/padorganizer --smoke-test
+          sudo apt-get remove --yes padorganizer
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: PADOrganizer-${{ needs.prepare.outputs.version }}-linux
+          path: |
+            release/padorganizer_${{ needs.prepare.outputs.version }}_amd64.deb
+            release/PADOrganizer-v${{ needs.prepare.outputs.version }}-x86_64.AppImage
+          if-no-files-found: error
+
+  publish-release:
+    if: github.event_name == 'push'
+    needs: [prepare, build-windows, build-linux]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: PADOrganizer-${{ needs.prepare.outputs.version }}-*
+          path: release
+          merge-multiple: true
+
+      - name: Create combined checksums
+        run: python3 scripts/new_checksums.py release
+
       - name: Publish GitHub Release
-        if: github.event_name == 'push'
-        shell: powershell
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" `
-            release/* `
-            --verify-tag `
-            --generate-notes `
-            --title "PADOrganizer v${{ steps.version.outputs.version }}"
+          gh release create "${{ github.ref_name }}" \
+            release/* \
+            --verify-tag \
+            --generate-notes \
+            --title "PADOrganizer v${{ needs.prepare.outputs.version }}"

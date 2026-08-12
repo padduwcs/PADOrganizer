@@ -1,16 +1,11 @@
 import json
-import sys
 from copy import deepcopy
 from pathlib import Path
 
-def get_base_dir():
-    if getattr(sys, 'frozen', False):
-        return Path(sys.executable).parent
-    else:
-        return Path(__file__).resolve().parent.parent
+from .platform_paths import APPLICATION_DIR, CONFIG_DIR, PAD_TRASH_DIR
 
-BASE_DIR = get_base_dir()
-PAD_TRASH_DIR = BASE_DIR / "PADOrganizer_Trash"
+
+BASE_DIR = APPLICATION_DIR
 
 DEFAULT_CONFIG = {
     "file_map": {
@@ -33,8 +28,8 @@ DEFAULT_CONFIG = {
 }
 
 class ConfigManager:
-    def __init__(self, filename="config.json"):
-        self.config_path = BASE_DIR / filename
+    def __init__(self, filename="config.json", config_dir=None):
+        self.config_path = Path(config_dir or CONFIG_DIR) / filename
         self.config = self.load_config()
 
     def load_config(self):
@@ -47,6 +42,7 @@ class ConfigManager:
         return deepcopy(DEFAULT_CONFIG)
 
     def save_config(self):
+        self.config_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.config_path, "w", encoding="utf-8") as f:
             json.dump(self.config, f, indent=4, ensure_ascii=False)
 

@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=PADOrganizer
+GenericName=File Organizer
+GenericName[vi]=Trình sắp xếp tệp
+Comment=Organize files and find duplicate content
+Comment[vi]=Sắp xếp tệp và tìm nội dung trùng lặp
+Exec=padorganizer
+Icon=padorganizer
+Terminal=false
+Categories=Utility;FileTools;
+StartupNotify=true
+StartupWMClass=PADOrganizer
+X-AppImage-Name=PADOrganizer
+X-AppImage-Arch=x86_64

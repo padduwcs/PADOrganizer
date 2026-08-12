@@ -1,0 +1,6 @@
+*.sh text eol=lf
+*.yml text eol=lf
+*.desktop text eol=lf
+packaging/linux/AppRun text eol=lf
+packaging/linux/appimage-launcher text eol=lf
+packaging/linux/padorganizer text eol=lf
