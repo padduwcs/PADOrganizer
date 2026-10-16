@@ -3,3 +3,5 @@ from .classifier import FileMover
 from .logger import PADLogger
 from .config_manager import ConfigManager
 from .deduplicator import Deduplicator
+
+__all__ = ["ConfigManager", "Deduplicator", "FileMover", "PADLogger"]

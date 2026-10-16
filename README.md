@@ -70,7 +70,13 @@ Các gói Linux hiện hỗ trợ máy Intel/AMD 64-bit (`x86_64`/`amd64`). Khô
 3. Chọn **Tổ chức ngay** và theo dõi kết quả trên màn hình.
 4. Dùng **Hoàn tác** nếu muốn khôi phục lần sắp xếp vừa thực hiện.
 
-Để dọn tệp trùng, chọn **Tìm bản trùng**, đánh dấu bản muốn giữ rồi chuyển các bản còn lại vào thùng rác nội bộ. Hãy kiểm tra kỹ trước khi chọn **Xóa vĩnh viễn**.
+Để dọn tệp trùng, chọn **Tìm bản trùng**, đánh dấu bản muốn giữ rồi chuyển các bản còn lại vào thùng rác nội bộ. Hãy kiểm tra kỹ trước khi chọn **Xóa vĩnh viễn**. Tệp rỗng (0 byte) không được tính là bản trùng.
+
+PADOrganizer chỉ xử lý tệp nằm trực tiếp trong thư mục đã chọn và luôn bỏ qua:
+
+- tệp ẩn hoặc tệp hệ thống (ví dụ `.bashrc`, `desktop.ini`) và liên kết tượng trưng (symlink);
+- thư mục con cùng nội dung bên trong;
+- thư mục gốc của ổ đĩa, thư mục Home và thư mục hệ thống như `C:\Windows`, `Program Files` hoặc `/usr`. Hãy chọn một thư mục con như `Downloads` hay `Desktop`.
 
 ## Cập nhật phiên bản
 

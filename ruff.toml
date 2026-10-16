@@ -1,0 +1,6 @@
+# Lint for real defects (syntax errors, undefined names, unused imports) without restyling the code.
+target-version = "py39"
+extend-exclude = ["venv", "build", "dist", "release"]
+
+[lint]
+select = ["E9", "F"]

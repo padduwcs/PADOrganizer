@@ -42,6 +42,28 @@ Trong máy không có display server:
 QT_QPA_PLATFORM=offscreen python -m unittest discover -s tests -v
 ```
 
+## Kiểm tra mã nguồn
+
+`requirements-dev.txt` cài sẵn `ruff`. Cấu hình trong `ruff.toml` chỉ bắt lỗi thật (cú pháp, tên chưa định nghĩa, import thừa) và không thay đổi định dạng mã:
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m ruff check .
+```
+
+GitHub Actions chạy bước này trước khi build bản phát hành.
+
+## Quy tắc an toàn khi xử lý tệp
+
+Mọi thao tác sắp xếp và tìm tệp trùng đều lấy danh sách tệp qua `modules/safety.py`:
+
+- Chỉ xử lý tệp nằm trực tiếp trong thư mục đã chọn; bỏ qua thư mục con, symlink, tệp bắt đầu bằng `.` và tệp có thuộc tính Hidden/System trên Windows.
+- Bỏ qua chính file chương trình đang chạy cùng `config.json`/`activity.log` cũ.
+- Không cho chọn thư mục ứng dụng, thư mục gốc của ổ đĩa, thư mục Home và thư mục hệ thống (`C:\Windows`, `Program Files`, `ProgramData`, `/usr`, `/etc`…).
+- Tìm tệp trùng chỉ băm những tệp có cùng kích thước và bỏ qua tệp 0 byte.
+
+Khi thêm tính năng mới có động tới tệp người dùng, hãy dùng lại `list_candidate_files` thay vì tự duyệt thư mục.
+
 ## Đóng gói Windows
 
 Tạo `dist/PADOrganizer.exe`:
@@ -133,6 +155,8 @@ PADOrganizer/
 ├── scripts/build_linux.sh          # Build DEB và AppImage
 ├── scripts/check_version.py        # Kiểm tra version đa nền tảng
 ├── scripts/new_checksums.py        # Tạo manifest SHA-256 đa nền tảng
+├── modules/safety.py               # Bộ lọc tệp và thư mục được phép xử lý
+├── ruff.toml                       # Cấu hình lint
 ├── PADOrganizer.spec               # PyInstaller one-file cho Windows
 ├── PADOrganizer-linux.spec         # PyInstaller one-dir cho Linux
 ├── build.bat                       # Build Windows portable

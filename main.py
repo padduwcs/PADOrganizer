@@ -31,24 +31,14 @@ from PyQt6.QtWidgets import (
     QApplication,
     QButtonGroup,
     QBoxLayout,
-    QDialog,
-    QFileDialog,
     QFrame,
     QGridLayout,
-    QGroupBox,
     QHBoxLayout,
     QHeaderView,
-    QLabel,
-    QLineEdit,
-    QMainWindow,
-    QMessageBox,
     QProgressBar,
-    QPushButton,
-    QRadioButton,
     QScrollArea,
     QSizeGrip,
     QSizePolicy,
-    QTableWidget,
     QTableWidgetItem,
     QTextBrowser,
     QVBoxLayout,
@@ -56,6 +46,7 @@ from PyQt6.QtWidgets import (
 )
 
 from modules import ConfigManager, Deduplicator, FileMover, PADLogger
+from modules.classifier import build_extension_index, categorize
 from modules.config_manager import DEFAULT_CONFIG, PAD_TRASH_DIR
 from modules.i18n import (
     LocalizedDialog as QDialog,
@@ -81,6 +72,7 @@ from modules.platform_paths import (
     RESOURCE_DIR,
     STATE_DIR,
 )
+from modules.safety import classify_target_directory, list_candidate_files
 from modules.theme import get_app_style, add_shadow
 from modules.updater import (
     UpdateError,
@@ -213,25 +205,17 @@ class WorkerThread(QThread):
     def __init__(self, watch_path, file_map, mover, logger, sort_by_date):
         super().__init__()
         self.watch_path = Path(watch_path)
-        self.file_map = file_map
+        self.extension_index = build_extension_index(file_map)
         self.mover = mover
         self.logger = logger
         self.sort_by_date = sort_by_date
 
     def get_category(self, extension):
-        ext_lower = extension.lower()
-        for category, extensions in self.file_map.items():
-            if ext_lower in extensions:
-                return category
-        return "Others"
+        return categorize(extension, self.extension_index)
 
     def run(self):
         try:
-            all_files = [
-                path
-                for path in self.watch_path.iterdir()
-                if path.is_file() and path.name not in {"activity.log", "config.json"}
-            ]
+            all_files = list_candidate_files(self.watch_path)
         except Exception as exc:
             self.failed.emit(f"Không thể đọc thư mục đã chọn: {exc}")
             return
@@ -277,6 +261,32 @@ class DedupeThread(QThread):
             self.completed.emit(duplicates)
         except Exception as exc:
             self.failed.emit(f"Không thể quét tệp trùng lặp: {exc}")
+
+
+class CleanupThread(QThread):
+    progress = pyqtSignal(int, int, str)
+    completed = pyqtSignal(int, int)
+    failed = pyqtSignal(str)
+
+    def __init__(self, files, permanent, mover, logger):
+        super().__init__()
+        self.files = list(files)
+        self.permanent = permanent
+        self.mover = mover
+        self.logger = logger
+
+    def run(self):
+        try:
+            success, errors = self.mover.discard_files(
+                self.files,
+                PAD_TRASH_DIR,
+                permanent=self.permanent,
+                logger=self.logger,
+                progress_callback=lambda current, total, name: self.progress.emit(current, total, name),
+            )
+            self.completed.emit(success, errors)
+        except Exception as exc:
+            self.failed.emit(f"Không thể dọn tệp trùng lặp: {exc}")
 
 
 class UpdateCheckThread(QThread):
@@ -787,12 +797,12 @@ class SettingsDialog(QDialog):
 
 
 class DedupeDialog(QDialog):
-    def __init__(self, duplicates, logger, mover, parent=None):
+    def __init__(self, duplicates, parent=None):
         super().__init__(parent)
         self.duplicates = duplicates
-        self.logger = logger
-        self.mover = mover
         self.group_buttons = []
+        self.files_to_remove = []
+        self.permanent = False
         self.setWindowTitle("Xử lý tệp trùng lặp")
         self.setModal(True)
         self.resize(820, 680)
@@ -925,35 +935,8 @@ class DedupeDialog(QDialog):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        success = 0
-        errors = 0
-        if permanent:
-            for file_path in files_to_remove:
-                try:
-                    file_path.unlink()
-                    self.logger.log(f"PERMANENT DELETED: {file_path.name}")
-                    success += 1
-                except Exception as exc:
-                    self.logger.log(f"PERM DELETE ERROR: {file_path.name} - {exc}")
-                    errors += 1
-        else:
-            PAD_TRASH_DIR.mkdir(parents=True, exist_ok=True)
-            self.mover.start_batch()
-            for file_path in files_to_remove:
-                try:
-                    new_path = self.mover.move_file(file_path, PAD_TRASH_DIR, sort_by_date=False)
-                    self.logger.log(f"TRASHED: {file_path.name} -> {new_path.name}")
-                    success += 1
-                except Exception as exc:
-                    self.logger.log(f"TRASH ERROR: {file_path.name} - {exc}")
-                    errors += 1
-            self.mover.end_batch()
-
-        QMessageBox.information(
-            self,
-            "Đã xử lý xong",
-            f"Thành công: {success}\nLỗi: {errors}",
-        )
+        self.files_to_remove = files_to_remove
+        self.permanent = permanent
         self.accept()
 
 
@@ -1636,11 +1619,20 @@ class MainWindow(QMainWindow):
         if not path.is_dir():
             QMessageBox.warning(self, "Thư mục không hợp lệ", "Không thể truy cập thư mục đã chọn.")
             return
-        if path in PROTECTED_DIRECTORIES:
+        protection = classify_target_directory(path, PROTECTED_DIRECTORIES)
+        if protection == "protected":
             QMessageBox.warning(
                 self,
                 "Không thể chọn thư mục ứng dụng",
                 "Để bảo vệ chương trình và dữ liệu cấu hình, hãy chọn một thư mục khác.",
+            )
+            return
+        if protection == "system":
+            QMessageBox.warning(
+                self,
+                "Không thể chọn thư mục hệ thống",
+                "Thư mục gốc của ổ đĩa, thư mục người dùng và thư mục hệ thống không được sắp xếp "
+                "để tránh làm hỏng hệ điều hành hoặc ứng dụng. Hãy chọn một thư mục con, ví dụ Downloads.",
             )
             return
         self.target_dir = str(path)
@@ -1667,7 +1659,7 @@ class MainWindow(QMainWindow):
 
         path = Path(self.target_dir)
         try:
-            files = [item for item in path.iterdir() if item.is_file()]
+            files = list_candidate_files(path)
             total_size = sum(item.stat().st_size for item in files)
         except OSError as exc:
             QMessageBox.critical(self, "Không thể đọc thư mục", str(exc))
@@ -2094,10 +2086,36 @@ class MainWindow(QMainWindow):
         self.action_title_label.setText("Đã tìm thấy bản trùng")
         self.status_label.setText(f"{len(duplicates)} nhóm cần bạn quyết định")
         self.set_status_pill("Cần xem lại", "warning")
-        dialog = DedupeDialog(duplicates, self.logger, self.mover, self)
-        dialog.exec()
-        self.refresh_directory_summary()
+        dialog = DedupeDialog(duplicates, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted or not dialog.files_to_remove:
+            self.refresh_directory_summary()
+            return
+        self.run_cleanup(dialog.files_to_remove, dialog.permanent)
+
+    def run_cleanup(self, files, permanent):
+        if permanent:
+            self.begin_operation("Đang xóa vĩnh viễn", "Xóa các bản trùng đã chọn...")
+        else:
+            self.begin_operation("Đang chuyển vào thùng rác", "Chuyển các bản trùng vào PADOrganizer_Trash...")
+        self.cleanup_worker = CleanupThread(files, permanent, self.mover, self.logger)
+        self.cleanup_worker.progress.connect(self.update_progress)
+        self.cleanup_worker.completed.connect(self.cleanup_finished)
+        self.cleanup_worker.failed.connect(self.operation_failed)
+        self.cleanup_worker.start()
+
+    def cleanup_finished(self, success, errors):
         self.set_ui_enabled(True)
+        self.progress.setValue(100)
+        self.percent_label.setText("100%")
+        self.refresh_directory_summary()
+        self.action_title_label.setText("Đã dọn bản trùng")
+        self.status_label.setText(f"Thành công: {success} · Lỗi: {errors}")
+        self.set_status_pill("Hoàn tất", "ready" if errors == 0 else "warning")
+        QMessageBox.information(
+            self,
+            "Đã xử lý xong",
+            f"Thành công: {success}\nLỗi: {errors}",
+        )
 
     def closeEvent(self, event):
         if self.is_busy:
