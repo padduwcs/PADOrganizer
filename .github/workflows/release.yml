@@ -203,6 +203,9 @@ jobs:
       - name: Create combined checksums
         run: python3 scripts/new_checksums.py release
 
+      - name: Extract release notes from CHANGELOG
+        run: python3 scripts/release_notes.py "${{ needs.prepare.outputs.version }}" "${{ runner.temp }}/release-notes.md"
+
       - name: Publish GitHub Release
         shell: bash
         env:
@@ -211,5 +214,5 @@ jobs:
           gh release create "${{ github.ref_name }}" \
             release/* \
             --verify-tag \
-            --generate-notes \
+            --notes-file "${{ runner.temp }}/release-notes.md" \
             --title "PADOrganizer v${{ needs.prepare.outputs.version }}"

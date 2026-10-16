@@ -506,7 +506,7 @@ class UpdateDialog(QDialog):
         layout.addWidget(notes_title)
         notes = QTextBrowser()
         notes.setObjectName("ReleaseNotes")
-        notes.setPlainText(translate(release.notes[:6000]))
+        notes.setMarkdown(translate(release.notes[:6000]))
         notes.setOpenExternalLinks(True)
         notes.setMinimumHeight(150)
         layout.addWidget(notes, 1)

@@ -75,14 +75,14 @@ build.bat
 Để tạo Installer và bản portable, cài Inno Setup 6 rồi chạy:
 
 ```bat
-build_release.bat 1.2.0
+build_release.bat 1.3.0
 ```
 
 Kết quả:
 
 ```text
-release/PADOrganizer-Setup-v1.2.0.exe
-release/PADOrganizer-portable-v1.2.0.exe
+release/PADOrganizer-Setup-v1.3.0.exe
+release/PADOrganizer-portable-v1.3.0.exe
 release/SHA256SUMS.txt
 ```
 
@@ -94,7 +94,7 @@ Linux artifact phải được build trên Linux; PyInstaller không cross-compi
 
 ```bash
 APPIMAGETOOL=/path/to/appimagetool-x86_64.AppImage \
-  bash scripts/build_linux.sh 1.2.0
+  bash scripts/build_linux.sh 1.3.0
 ```
 
 Máy build cần `dpkg-deb`, `appimagetool` và các thư viện runtime Qt được khai báo trong `packaging/linux/debian/control`. GitHub Actions tự chuẩn bị toàn bộ môi trường này.
@@ -102,8 +102,8 @@ Máy build cần `dpkg-deb`, `appimagetool` và các thư viện runtime Qt đư
 Kết quả:
 
 ```text
-release/padorganizer_1.2.0_amd64.deb
-release/PADOrganizer-v1.2.0-x86_64.AppImage
+release/padorganizer_1.3.0_amd64.deb
+release/PADOrganizer-v1.3.0-x86_64.AppImage
 release/SHA256SUMS.txt
 ```
 
@@ -113,19 +113,40 @@ Kiểm tra nhanh executable đã đóng gói:
 xvfb-run -a dist/PADOrganizer/PADOrganizer --smoke-test
 ```
 
-## Phiên bản và phát hành
+## Logo và icon
 
-Trước khi build, cập nhật `APP_VERSION` trong `version.py`. Script sẽ từ chối build nếu phiên bản truyền vào không khớp:
+`assets/logo.png` (1024×1024, nền trong suốt) là ảnh gốc của mọi icon. Sau khi thay logo, tạo lại icon bằng:
 
 ```bash
-python scripts/check_version.py 1.2.0
+python -m pip install pillow
+python scripts/build_icons.py
+```
+
+Script ghi đè `logo.ico` (Windows), `assets/padorganizer.png` (256 px, Linux và logo trong giao diện) và `assets/padorganizer-512.png` (Linux HiDPI). `assets/banner.png` dùng cho README; `assets/social-preview.png` (1280×640) dùng làm ảnh xem trước khi chia sẻ liên kết, tải lên tại **Settings → General → Social preview** của repository.
+
+## Tích hợp liên tục
+
+`.github/workflows/ci.yml` chạy `ruff` và toàn bộ test trên Windows lẫn Ubuntu cho mỗi lần push lên `main` và mỗi Pull Request.
+
+## Phiên bản và phát hành
+
+Trước khi phát hành:
+
+1. Cập nhật `APP_VERSION` trong `version.py`.
+2. Thêm mục `## [X.Y.Z] - YYYY-MM-DD` vào đầu [CHANGELOG.md](../CHANGELOG.md). Nội dung mục này trở thành ghi chú phát hành trên GitHub và hiển thị trong hộp thoại **Có gì mới** của ứng dụng.
+
+Script sẽ từ chối build nếu phiên bản truyền vào không khớp `version.py`, và test sẽ báo lỗi nếu CHANGELOG thiếu mục cho phiên bản hiện tại:
+
+```bash
+python scripts/check_version.py 1.3.0
+python scripts/release_notes.py 1.3.0 release-notes.md
 ```
 
 Workflow `.github/workflows/release.yml` có ba giai đoạn:
 
-1. Kiểm tra version từ tag hoặc input thủ công.
+1. Kiểm tra version từ tag hoặc input thủ công, rồi chạy lint.
 2. Build và test độc lập trên Windows và Ubuntu 22.04; AppImage và gói DEB đều được chạy smoke test sau khi đóng gói.
-3. Gộp bốn artifact, tạo một `SHA256SUMS.txt`, rồi xuất bản GitHub Release.
+3. Gộp bốn artifact, tạo một `SHA256SUMS.txt`, lấy ghi chú từ CHANGELOG rồi xuất bản GitHub Release.
 
 Chạy workflow thủ công từ tab **Actions** chỉ tạo artifact thử nghiệm, không tạo Release. Khi đã kiểm tra xong, phát hành bằng tag mới:
 
@@ -149,13 +170,18 @@ SHA256SUMS.txt
 
 ```text
 PADOrganizer/
-├── assets/                         # Icon bitmap dùng trên Linux
+├── assets/logo.png                 # Logo gốc, nguồn để tạo mọi icon
+├── assets/                         # Icon PNG, banner README và ảnh social preview
+├── docs/images/                    # Ảnh chụp màn hình cho README
 ├── installer/PADOrganizer.iss      # Inno Setup cho Windows
 ├── packaging/linux/                # Desktop entry, launcher và metadata DEB
+├── modules/safety.py               # Bộ lọc tệp và thư mục được phép xử lý
+├── scripts/build_icons.py          # Tạo logo.ico và icon PNG từ assets/logo.png
 ├── scripts/build_linux.sh          # Build DEB và AppImage
 ├── scripts/check_version.py        # Kiểm tra version đa nền tảng
 ├── scripts/new_checksums.py        # Tạo manifest SHA-256 đa nền tảng
-├── modules/safety.py               # Bộ lọc tệp và thư mục được phép xử lý
+├── scripts/release_notes.py        # Lấy ghi chú phát hành từ CHANGELOG.md
+├── CHANGELOG.md                    # Nhật ký thay đổi theo phiên bản
 ├── ruff.toml                       # Cấu hình lint
 ├── PADOrganizer.spec               # PyInstaller one-file cho Windows
 ├── PADOrganizer-linux.spec         # PyInstaller one-dir cho Linux
