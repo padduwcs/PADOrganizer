@@ -127,6 +127,7 @@ jobs:
             libxcb-keysyms1 \
             libxcb-randr0 \
             libxcb-render-util0 \
+            libxcb-shape0 \
             libxcb-xinerama0 \
             libxcb-xkb1 \
             xvfb
