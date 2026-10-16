@@ -1,0 +1,58 @@
+name: Báo lỗi / Bug report
+description: Ứng dụng hoạt động không như mong đợi
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Cảm ơn bạn đã báo lỗi! Vui lòng xóa đường dẫn hoặc tên tệp nhạy cảm trước khi gửi.
+        Lỗ hổng bảo mật hãy báo riêng theo [SECURITY.md](../blob/main/SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: Phiên bản PADOrganizer
+      description: Hiển thị ở góc dưới thanh bên, ví dụ v1.3.0
+      placeholder: v1.3.0
+    validations:
+      required: true
+  - type: dropdown
+    id: package
+    attributes:
+      label: Gói cài đặt
+      options:
+        - Windows Installer
+        - Windows portable
+        - Linux .deb
+        - Linux AppImage
+        - Chạy từ mã nguồn
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Hệ điều hành
+      placeholder: Windows 11 23H2 / Ubuntu 24.04
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Các bước tái hiện
+      placeholder: |
+        1. Chọn thư mục ...
+        2. Bấm "Tổ chức ngay"
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Kết quả mong đợi và kết quả thực tế
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Nhật ký liên quan (tùy chọn)
+      description: Trích từ activity.log trong thư mục logs của ứng dụng
+      render: text

@@ -34,6 +34,8 @@ build-tools/
 
 # Cấu hình người dùng
 config.json
+config.json.tmp
+config.json.broken
 
 # Thùng rác nội bộ
 PADOrganizer_Trash/
