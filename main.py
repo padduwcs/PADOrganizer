@@ -23,6 +23,7 @@ from PyQt6.QtGui import (
     QIcon,
     QKeySequence,
     QPainter,
+    QPixmap,
     QShortcut,
 )
 from PyQt6.QtWidgets import (
@@ -87,6 +88,7 @@ from version import APP_VERSION
 
 APP_NAME = "PADOrganizer"
 APP_FULL_NAME = "PADOrganizer: Personal Archive Directory Organizer"
+BRAND_LOGO = "assets/padorganizer.png"
 PROTECTED_DIRECTORIES = {
     path.resolve() for path in {APPLICATION_DIR, CONFIG_DIR, DATA_DIR, STATE_DIR}
 }
@@ -95,6 +97,27 @@ PROTECTED_DIRECTORIES = {
 def get_resource_path(relative_path):
     """Return an absolute resource path in development and PyInstaller builds."""
     return str(RESOURCE_DIR / relative_path)
+
+
+def make_brand_logo(size, object_name):
+    """Return a label showing the PAD logo, sharp on high-DPI screens."""
+    label = QLabel()
+    label.setObjectName(object_name)
+    label.setFixedSize(size, size)
+    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+    pixmap = QPixmap(get_resource_path(BRAND_LOGO))
+    if not pixmap.isNull():
+        ratio = QApplication.instance().devicePixelRatio()
+        pixmap = pixmap.scaled(
+            round(size * ratio),
+            round(size * ratio),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        pixmap.setDevicePixelRatio(ratio)
+        label.setPixmap(pixmap)
+    return label
 
 
 def format_bytes(size):
@@ -153,8 +176,8 @@ class ToggleSwitch(QAbstractButton):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
         dark_mode = QApplication.instance().property("theme") == "dark"
-        off_color = "#555c6c" if dark_mode else "#c4cad6"
-        painter.setBrush(QColor("#8d79f5") if self.isChecked() else QColor(off_color))
+        off_color = "#615b55" if dark_mode else "#cec9c3"
+        painter.setBrush(QColor("#d76f32") if self.isChecked() else QColor(off_color))
         painter.drawRoundedRect(QRectF(0, 0, 46, 25), 12.5, 12.5)
         painter.setBrush(QColor("#ffffff"))
         painter.drawEllipse(QRectF(self._handle_position, 3, 19, 19))
@@ -951,17 +974,7 @@ class TitleBar(QFrame):
         layout.setContentsMargins(14, 0, 0, 0)
         layout.setSpacing(9)
 
-        mark = QFrame()
-        mark.setObjectName("TitleBrandMark")
-        mark.setFixedSize(24, 24)
-        mark_layout = QVBoxLayout(mark)
-        mark_layout.setContentsMargins(0, 0, 0, 0)
-        mark_text = QLabel("P")
-        mark_text.setObjectName("TitleBrandLetter")
-        mark_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        mark_text.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        mark_layout.addWidget(mark_text)
-        layout.addWidget(mark)
+        layout.addWidget(make_brand_logo(26, "TitleBrandLogo"))
 
         title = QLabel(APP_NAME)
         title.setObjectName("WindowTitle")
@@ -1055,7 +1068,7 @@ class MainWindow(QMainWindow):
         self.resize(1220, 820)
         self.setAcceptDrops(True)
 
-        icon_name = "logo.ico" if sys.platform == "win32" else "assets/padorganizer.png"
+        icon_name = "logo.ico" if sys.platform == "win32" else BRAND_LOGO
         icon_path = get_resource_path(icon_name)
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
@@ -1094,15 +1107,7 @@ class MainWindow(QMainWindow):
 
         brand = QHBoxLayout()
         brand.setSpacing(11)
-        mark = QFrame()
-        mark.setObjectName("BrandMark")
-        mark.setFixedSize(43, 43)
-        mark_layout = QVBoxLayout(mark)
-        mark_layout.setContentsMargins(0, 0, 0, 0)
-        mark_letter = QLabel("P")
-        mark_letter.setObjectName("BrandLetter")
-        mark_letter.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        mark_layout.addWidget(mark_letter)
+        mark = make_brand_logo(46, "BrandLogo")
         brand_text = QVBoxLayout()
         brand_text.setSpacing(0)
         brand_title = QLabel(APP_NAME)

@@ -4,7 +4,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('logo.ico', '.')],
+    datas=[('logo.ico', '.'), ('assets/padorganizer.png', 'assets')],
     hiddenimports=['PyQt6'],
     hookspath=[],
     hooksconfig={},
