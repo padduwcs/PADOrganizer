@@ -2,10 +2,13 @@
 import hashlib
 from pathlib import Path
 
+from .safety import list_candidate_files
+
+
 class Deduplicator:
     @staticmethod
     def hash_file(file_path: Path, block_size=65536) -> str:
-        hasher = hashlib.md5()
+        hasher = hashlib.blake2b()
         try:
             with open(file_path, 'rb') as afile:
                 buf = afile.read(block_size)
@@ -16,30 +19,28 @@ class Deduplicator:
         except Exception:
             return None
 
-    def find_duplicates(self, target_dir: Path, progress_callback=None):
+    def find_duplicates(self, target_dir: Path, progress_callback=None, excluded_paths=()):
+        # Only files that share a size can be identical, so group by size before hashing.
+        # Empty files are skipped: they carry no content worth deduplicating.
+        sizes = {}
+        for f in list_candidate_files(target_dir, excluded_paths):
+            try:
+                size = f.stat().st_size
+            except OSError:
+                continue
+            if size > 0:
+                sizes.setdefault(size, []).append(f)
+
+        files_to_hash = [f for group in sizes.values() if len(group) > 1 for f in group]
+        total_files = len(files_to_hash)
+
         hashes = {}
-        duplicates = []
-        
-        all_files = []
-        for f in target_dir.iterdir():
-            if f.is_file():
-                all_files.append(f)
-                
-        total_files = len(all_files)
-        
-        for i, file_path in enumerate(all_files):
+        for i, file_path in enumerate(files_to_hash):
             file_hash = self.hash_file(file_path)
             if file_hash:
-                if file_hash in hashes:
-                    hashes[file_hash].append(file_path)
-                else:
-                    hashes[file_hash] = [file_path]
-            
+                hashes.setdefault(file_hash, []).append(file_path)
+
             if progress_callback:
                 progress_callback(i + 1, total_files, file_path.name)
-                
-        for file_hash, file_list in hashes.items():
-            if len(file_list) > 1:
-                duplicates.append(file_list)
-                
-        return duplicates
+
+        return [file_list for file_list in hashes.values() if len(file_list) > 1]
