@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Báo cáo lỗ hổng bảo mật / Security vulnerability
+    url: https://github.com/padduwcs/PADOrganizer/security/advisories/new
+    about: Báo cáo riêng, không đăng công khai.
+  - name: Tải phiên bản mới nhất / Latest release
+    url: https://github.com/padduwcs/PADOrganizer/releases/latest
+    about: Installer Windows, bản portable, gói .deb và AppImage.

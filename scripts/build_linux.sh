@@ -35,11 +35,14 @@ mkdir -p \
     "$APPDIR/usr/bin" \
     "$APPDIR/usr/share/applications" \
     "$APPDIR/usr/share/icons/hicolor/256x256/apps" \
+    "$APPDIR/usr/share/icons/hicolor/512x512/apps" \
     "$DEB_ROOT/DEBIAN" \
     "$DEB_ROOT/opt/padorganizer" \
     "$DEB_ROOT/usr/bin" \
     "$DEB_ROOT/usr/share/applications" \
     "$DEB_ROOT/usr/share/icons/hicolor/256x256/apps" \
+    "$DEB_ROOT/usr/share/icons/hicolor/512x512/apps" \
+    "$DEB_ROOT/usr/share/doc/padorganizer" \
     release
 
 cp -a dist/PADOrganizer/. "$APPDIR/usr/lib/padorganizer/"
@@ -49,11 +52,16 @@ install -m 0644 packaging/linux/padorganizer.desktop "$APPDIR/padorganizer.deskt
 install -m 0644 packaging/linux/padorganizer.desktop "$APPDIR/usr/share/applications/padorganizer.desktop"
 install -m 0644 assets/padorganizer.png "$APPDIR/padorganizer.png"
 install -m 0644 assets/padorganizer.png "$APPDIR/usr/share/icons/hicolor/256x256/apps/padorganizer.png"
+install -m 0644 assets/padorganizer-512.png "$APPDIR/usr/share/icons/hicolor/512x512/apps/padorganizer.png"
+install -m 0644 LICENSE NOTICE "$APPDIR/usr/lib/padorganizer/"
 
 cp -a dist/PADOrganizer/. "$DEB_ROOT/opt/padorganizer/"
 install -m 0755 packaging/linux/padorganizer "$DEB_ROOT/usr/bin/padorganizer"
 install -m 0644 packaging/linux/padorganizer.desktop "$DEB_ROOT/usr/share/applications/padorganizer.desktop"
 install -m 0644 assets/padorganizer.png "$DEB_ROOT/usr/share/icons/hicolor/256x256/apps/padorganizer.png"
+install -m 0644 assets/padorganizer-512.png "$DEB_ROOT/usr/share/icons/hicolor/512x512/apps/padorganizer.png"
+install -m 0644 LICENSE "$DEB_ROOT/usr/share/doc/padorganizer/copyright"
+install -m 0644 NOTICE "$DEB_ROOT/usr/share/doc/padorganizer/NOTICE"
 sed "s/@VERSION@/${VERSION}/g" packaging/linux/debian/control > "$DEB_ROOT/DEBIAN/control"
 dpkg-deb --build --root-owner-group "$DEB_ROOT" "release/$DEB_NAME"
 

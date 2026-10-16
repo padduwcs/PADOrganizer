@@ -1,0 +1,8 @@
+PADOrganizer — Personal Archive Directory Organizer
+Copyright 2026 Anh-Duc Phan (padduwcs)
+
+This product is licensed under the Apache License, Version 2.0.
+See the LICENSE file for the full license text.
+
+PADOrganizer uses PyQt6 (GPL v3 / commercial, Riverbank Computing) and
+Qt 6 (LGPL v3, The Qt Company), which are distributed under their own licenses.

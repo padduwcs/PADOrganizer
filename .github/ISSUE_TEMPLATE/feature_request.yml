@@ -1,0 +1,21 @@
+name: Đề xuất tính năng / Feature request
+description: Gợi ý một tính năng hoặc cải tiến mới
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Vấn đề bạn gặp phải
+      description: Bạn đang muốn làm gì mà PADOrganizer chưa hỗ trợ tốt?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Giải pháp đề xuất
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Cách làm thay thế bạn đã thử (tùy chọn)
